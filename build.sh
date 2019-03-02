@@ -1,7 +1,7 @@
 #!/bin/sh
 
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./docker/server ./server
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./docker/client ./client
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./docker/server -ldflags "-s -w" ./server
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./docker/client -ldflags "-s -w" ./client
 
 cd ./docker
 tar czf tmp.tar.gz server client
