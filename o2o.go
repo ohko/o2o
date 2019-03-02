@@ -5,10 +5,27 @@ import (
 	"encoding/binary"
 	"errors"
 	"net"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 )
 
-const signWord = 0x4B48 // HK
+// ...
+const (
+	CMDMSG     = "\x00" // 普通信息
+	CMDCLIENT  = "\x01" // 1.客户端请求TCP隧道服务
+	CMDREQUEST = "\x02" // 2.服务器发送浏览器请求服务
+	CMDTENNEL  = "\x03" // 3.客户端建立TCP隧道连接
+	signWord   = 0x4B48 // HK
+)
+
+// CatchCtrlC 捕捉Ctrl+C
+func CatchCtrlC() {
+	c := make(chan os.Signal)
+	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
+	<-c
+}
 
 // Conn2IP 返回IP地址
 func Conn2IP(conn net.Conn) string {
@@ -16,8 +33,12 @@ func Conn2IP(conn net.Conn) string {
 }
 
 // Send 发送数据
-func Send(conn net.Conn, data []byte) error {
-	buffer := bytes.NewBuffer(nil)
+func Send(conn net.Conn, cmd, data string) error {
+	dataBuf := make([]byte, len(cmd)+len(data))
+	copy(dataBuf, cmd)
+	copy(dataBuf[len(cmd):], data)
+
+	// buffer := bytes.NewBuffer(nil)
 	// defer func() { log.Println("send:", conn.RemoteAddr(), hex.Dump(buffer.Bytes())) }()
 
 	// 标识位
@@ -26,36 +47,36 @@ func Send(conn net.Conn, data []byte) error {
 	if _, err := conn.Write(sign); err != nil {
 		return err
 	}
-	buffer.Write(sign)
+	// buffer.Write(sign)
 
 	// CRC
 	icrc := make([]byte, 2)
-	binary.LittleEndian.PutUint16(icrc, crc(data))
+	binary.LittleEndian.PutUint16(icrc, crc(dataBuf))
 	if _, err := conn.Write(icrc); err != nil {
 		return err
 	}
-	buffer.Write(icrc)
+	// buffer.Write(icrc)
 
 	// 数据长度
 	size := make([]byte, 4)
-	binary.LittleEndian.PutUint32(size, uint32(len(data)))
+	binary.LittleEndian.PutUint32(size, uint32(len(dataBuf)))
 	if _, err := conn.Write(size); err != nil {
 		return err
 	}
-	buffer.Write(size)
+	// buffer.Write(size)
 
 	// 数据
-	if _, err := conn.Write(data); err != nil {
+	if _, err := conn.Write(dataBuf); err != nil {
 		return err
 	}
-	buffer.Write(data)
+	// buffer.Write(dataBuf)
 
 	return nil
 }
 
 // Recv 接收数据
 func Recv(conn net.Conn) ([]byte, error) {
-	buffer := bytes.NewBuffer(nil)
+	// buffer := bytes.NewBuffer(nil)
 	// defer func() { log.Println("recv:", conn.LocalAddr(), hex.Dump(buffer.Bytes())) }()
 
 	// 读取2字节，判断标志
@@ -63,7 +84,7 @@ func Recv(conn net.Conn) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	buffer.Write(sign)
+	// buffer.Write(sign)
 	if binary.LittleEndian.Uint16(sign) != signWord {
 		return nil, errors.New("sign error")
 	}
@@ -73,14 +94,14 @@ func Recv(conn net.Conn) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	buffer.Write(icrc)
+	// buffer.Write(icrc)
 
 	// 读取数据长度
 	bsize, err := recvHelper(conn, 4)
 	if err != nil {
 		return nil, err
 	}
-	buffer.Write(bsize)
+	// buffer.Write(bsize)
 	size := binary.LittleEndian.Uint32(bsize)
 	if size <= 0 {
 		return nil, errors.New("size error")
@@ -88,10 +109,10 @@ func Recv(conn net.Conn) ([]byte, error) {
 
 	// 3. 读取数据
 	buf, err := recvHelper(conn, int(size))
-	buffer.Write(buf)
+	// buffer.Write(buf)
 
 	if binary.LittleEndian.Uint16(icrc) != crc(buf) {
-		return nil, errors.New("sign error")
+		return nil, errors.New("crc error")
 	}
 	return buf, nil
 }
