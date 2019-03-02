@@ -8,67 +8,84 @@ import (
 	"o2o"
 	"strings"
 	"sync"
-
-	"github.com/ohko/omsg"
 )
 
 var (
-	server     *omsg.Server
-	proxy      map[net.Conn]net.Listener
+	clients    map[net.Conn]net.Listener
 	webClients map[string]net.Conn
 	lock       sync.Mutex
 
 	serverPort = flag.String("s", ":2399", "外网服务器服务端口，用于接收内网服务器连接")
-	tunnelPort = flag.String("t", ":2398", "内网需服务连接到外网服务器的隧道端口")
 )
 
 func main() {
 	flag.Parse()
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
-	proxy = make(map[net.Conn]net.Listener)
+	clients = make(map[net.Conn]net.Listener)
 	webClients = make(map[string]net.Conn)
 
-	go tunnelServer()
+	startServer()
+	o2o.CatchCtrlC()
+}
 
-	server = omsg.NewServer()
-	server.OnNewClient = onNewClient
-	server.OnClientClose = onClientClose
-	server.OnData = onData
+func startServer() {
+	server, err := net.Listen("tcp", *serverPort)
+	if err != nil {
+		log.Println(err)
+		return
+	}
 	log.Println("server:", *serverPort)
-	log.Println(server.StartServer(*serverPort))
-}
 
-func onNewClient(conn net.Conn) {
-	// log.Println("new client:", conn.RemoteAddr())
-}
+	for {
+		conn, err := server.Accept()
+		if err != nil {
+			break
+		}
 
-func onClientClose(conn net.Conn) {
-	// log.Println("client disconnect:", conn.RemoteAddr())
-	lock.Lock()
-	defer lock.Unlock()
-
-	if v, ok := proxy[conn]; ok {
-		v.Close()
-		delete(proxy, conn)
+		go listen(conn)
 	}
 }
 
-func onData(conn net.Conn, data []byte) {
-	tmp := strings.Split(string(data), "|")
-	cmd, ext := tmp[0], tmp[1]
-	if cmd == "proxy" {
-		// 8080:192.168.1.238:50000 请求服务器开启8080端口代理192.168.1.238的5000端口
-		log.Println("req:", o2o.Conn2IP(conn), ext)
+func listen(conn net.Conn) {
+	defer func() {
+		// 断开
+		lock.Lock()
+		defer lock.Unlock()
+		if v, ok := clients[conn]; ok {
+			v.Close()
+			delete(clients, conn)
+		}
+	}()
 
-		go createWeb(ext, conn)
+	for {
+		data, err := o2o.Recv(conn)
+		if err != nil {
+			return
+		}
+
+		cmd, ext := string(data[0]), string(data[1:])
+		switch string(cmd) {
+		case o2o.CMDCLIENT:
+			log.Println("req:", o2o.Conn2IP(conn), ext)
+			go createListen(ext, conn)
+		case o2o.CMDTENNEL:
+			go func() {
+				lock.Lock()
+				defer lock.Unlock()
+				go io.Copy(webClients[ext], conn)
+				go io.Copy(conn, webClients[ext])
+			}()
+			return // 必须有，结束后返回，不要再recv数据了
+		}
 	}
 }
 
-func createWeb(addr string, client net.Conn) {
+// 8080:192.168.1.238:50000 请求服务器开启8080端口代理192.168.1.238的5000端口
+func createListen(addr string, client net.Conn) {
 	tmp := strings.Split(addr, ":")
 	if len(tmp) != 3 {
-		if err := server.Send(client, []byte(`error|addr format error:`+addr)); err != nil {
+		if err := o2o.Send(client, o2o.CMDMSG, `format error:`+addr); err != nil {
 			log.Println(err)
 		}
 		return
@@ -78,18 +95,17 @@ func createWeb(addr string, client net.Conn) {
 	web, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Println(err)
-		if err := server.Send(client, []byte(`error|`+err.Error())); err != nil {
+		if err := o2o.Send(client, o2o.CMDMSG, err.Error()); err != nil {
 			log.Println(err)
 		}
 		return
 	}
 	log.Println("listen:", port)
+
 	lock.Lock()
-	proxy[client] = web
+	clients[client] = web
 	lock.Unlock()
-	if err := server.Send(client, []byte(`listen|`+addr)); err != nil {
-		log.Println(err)
-	}
+
 	for {
 		conn, err := web.Accept()
 		if err != nil {
@@ -100,38 +116,10 @@ func createWeb(addr string, client net.Conn) {
 			defer lock.Unlock()
 
 			webClients[conn.RemoteAddr().String()] = conn
-			if err := server.Send(client, []byte(`tunnel|`+conn.RemoteAddr().String())); err != nil {
+			if err := o2o.Send(client, o2o.CMDREQUEST, conn.RemoteAddr().String()); err != nil {
 				log.Println(err)
 			}
 		}(conn)
 	}
 	log.Println("close:", port)
-}
-
-func tunnelServer() {
-	tunnel, err := net.Listen("tcp", *tunnelPort)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.Println("tunnel:", *tunnelPort)
-	for {
-		conn, err := tunnel.Accept()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-
-		tmp, err := o2o.Recv(conn)
-		if err != nil {
-			log.Println(err)
-			continue
-		}
-
-		go func() {
-			lock.Lock()
-			defer lock.Unlock()
-			go io.Copy(webClients[string(tmp)], conn)
-			go io.Copy(conn, webClients[string(tmp)])
-		}()
-	}
 }

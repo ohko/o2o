@@ -1,2 +1,0 @@
-# github.com/ohko/omsg v0.0.0-20190302055628-a2611bdf62e4
-github.com/ohko/omsg
