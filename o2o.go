@@ -22,6 +22,12 @@ const (
 	signWord   = 0x4B48 // HK
 )
 
+var (
+	aesEnable bool
+	aesKey    [32]byte
+	aesIV     [16]byte
+)
+
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 }
@@ -54,11 +60,19 @@ func send(conn net.Conn, cmd, data string) error {
 	// 标识位
 	binary.LittleEndian.PutUint16(dataBuf, signWord)
 
+	if aesEnable {
+		bs, err := aesEncode(dataBuf[8:])
+		if err != nil {
+			return err
+		}
+		copy(dataBuf[8:], bs)
+	}
+
 	// CRC
 	binary.LittleEndian.PutUint16(dataBuf[2:], crc(dataBuf[8:]))
 
 	// 数据长度
-	binary.LittleEndian.PutUint32(dataBuf[4:], uint32(len(cmd)+len(data)))
+	binary.LittleEndian.PutUint32(dataBuf[4:], uint32(len(cmd)+len(data))+signWord)
 
 	// 数据
 	n, err := conn.Write(dataBuf)
@@ -90,17 +104,26 @@ func recv(conn net.Conn) ([]byte, error) {
 	}
 
 	// 读取数据长度
-	size := binary.LittleEndian.Uint32(header[4:])
+	size := binary.LittleEndian.Uint32(header[4:]) - signWord
 	if size <= 0 {
 		return nil, errors.New("size error")
 	}
 
-	// 3. 读取数据
+	// 读取数据
 	buf, err = recvHelper(conn, int(size))
 
 	if binary.LittleEndian.Uint16(header[2:4]) != crc(buf) {
 		return nil, errors.New("crc error")
 	}
+
+	if aesEnable {
+		bs, err := aesEncode(buf)
+		if err != nil {
+			return nil, err
+		}
+		copy(buf, bs)
+	}
+
 	return buf, nil
 }
 

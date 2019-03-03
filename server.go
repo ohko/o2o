@@ -1,6 +1,8 @@
 package o2o
 
 import (
+	"crypto/md5"
+	"crypto/sha256"
 	"io"
 	"log"
 	"net"
@@ -17,10 +19,21 @@ type Server struct {
 }
 
 // Start 启动服务
-func (o *Server) Start(serverPort string) error {
+func (o *Server) Start(key, serverPort string) error {
 	o.serverPort = serverPort
 	o.clients = make(map[net.Conn]net.Listener)
 	o.webClients = make(map[string]net.Conn)
+
+	if len(key) > 0 {
+		aesEnable = true
+		bsKey := sha256.Sum256([]byte(key))
+		bsIV := md5.Sum([]byte(key))
+		copy(aesKey[:], bsKey[:])
+		copy(aesIV[:], bsIV[:])
+		log.Println("AES crypt enabled")
+	} else {
+		log.Println("AES crypt disabled")
+	}
 
 	server, err := net.Listen("tcp", o.serverPort)
 	if err != nil {
@@ -69,8 +82,16 @@ func (o *Server) listen(conn net.Conn) {
 			go func() {
 				o.lock.Lock()
 				defer o.lock.Unlock()
-				go io.Copy(o.webClients[ext], conn)
-				go io.Copy(conn, o.webClients[ext])
+				web := o.webClients[ext]
+				if aesEnable {
+					rw1 := &rw{conn: web, origin: web}
+					rw2 := &rw{conn: conn, origin: web}
+					go io.Copy(rw1, rw2)
+					go io.Copy(rw2, rw1)
+				} else {
+					go io.Copy(web, conn)
+					go io.Copy(conn, web)
+				}
 			}()
 			return // 必须有，结束后返回，不要再recv数据了
 		}
