@@ -1,6 +1,8 @@
 package o2o
 
 import (
+	"crypto/md5"
+	"crypto/sha256"
 	"io"
 	"log"
 	"net"
@@ -17,10 +19,21 @@ type Client struct {
 }
 
 // Start 启动客户端
-func (o *Client) Start(serverPort, proxyPort string, reconnect bool, onSuccess func(msg string)) error {
+func (o *Client) Start(key, serverPort, proxyPort string, reconnect bool, onSuccess func(msg string)) error {
 	o.serverPort, o.proxyPort = serverPort, proxyPort
 	o.reconnect = reconnect
 	o.onSuccess = onSuccess
+
+	if len(key) > 0 {
+		aesEnable = true
+		bsKey := sha256.Sum256([]byte(key))
+		bsIV := md5.Sum([]byte(key))
+		copy(aesKey[:], bsKey[:])
+		copy(aesIV[:], bsIV[:])
+		log.Println("AES crypt enabled")
+	} else {
+		log.Println("AES crypt disabled")
+	}
 
 	return o.Reconnect()
 }
@@ -89,11 +102,19 @@ func (o *Client) listen() {
 					return
 				}
 
-				go io.Copy(loc, cs)
-				go io.Copy(cs, loc)
 				if err := send(cs, CMDTENNEL, ext); err != nil {
 					loc.Close()
 					cs.Close()
+					return
+				}
+				if aesEnable {
+					rw1 := &rw{conn: loc, origin: loc}
+					rw2 := &rw{conn: cs, origin: loc}
+					go io.Copy(rw1, rw2)
+					go io.Copy(rw2, rw1)
+				} else {
+					go io.Copy(loc, cs)
+					go io.Copy(cs, loc)
 				}
 			}
 		}(string(data[0]), string(data[1:]))

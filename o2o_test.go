@@ -12,8 +12,9 @@ import (
 func serivces() {
 	serverPort := ":2399"
 	proxyPort := "2345:127.0.0.1:5000"
+	key := "12345678"
 
-	if err := (&Server{}).Start(serverPort); err != nil {
+	if err := (&Server{}).Start(key, serverPort); err != nil {
 		log.Fatal(err)
 	}
 
@@ -25,7 +26,7 @@ func serivces() {
 		}
 	}
 
-	if err := (&Client{}).Start(serverPort, proxyPort, false, success); err != nil {
+	if err := (&Client{}).Start(key, serverPort, proxyPort, false, success); err != nil {
 		log.Fatal(err)
 	}
 
@@ -79,7 +80,7 @@ func TestServerClient(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	msg := []byte("123456789")
+	msg := []byte("12345678")
 	if _, err := conn.Write(msg); err != nil {
 		t.Fatal(err)
 	}
