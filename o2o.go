@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -16,24 +17,29 @@ const (
 	CMDMSG     = "\x00" // 普通信息
 	CMDCLIENT  = "\x01" // 1.客户端请求TCP隧道服务
 	CMDREQUEST = "\x02" // 2.服务器发送浏览器请求服务
-	CMDTENNEL  = "\x03" // 3.客户端建立TCP隧道连接
+	CMDSUCCESS = "\x03" // 3.服务器监听成功
+	CMDTENNEL  = "\x04" // 4.客户端建立TCP隧道连接
 	signWord   = 0x4B48 // HK
 )
 
-// CatchCtrlC 捕捉Ctrl+C
-func CatchCtrlC() {
+func init() {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+}
+
+// WaitCtrlC 捕捉Ctrl+C
+func WaitCtrlC() {
 	c := make(chan os.Signal)
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	<-c
 }
 
-// Conn2IP 返回IP地址
-func Conn2IP(conn net.Conn) string {
+// 返回IP地址
+func conn2IP(conn net.Conn) string {
 	return strings.Split(conn.RemoteAddr().String(), ":")[0]
 }
 
-// Send 发送数据
-func Send(conn net.Conn, cmd, data string) error {
+// 发送数据
+func send(conn net.Conn, cmd, data string) error {
 	dataBuf := make([]byte, len(cmd)+len(data))
 	copy(dataBuf, cmd)
 	copy(dataBuf[len(cmd):], data)
@@ -74,8 +80,8 @@ func Send(conn net.Conn, cmd, data string) error {
 	return nil
 }
 
-// Recv 接收数据
-func Recv(conn net.Conn) ([]byte, error) {
+// 接收数据
+func recv(conn net.Conn) ([]byte, error) {
 	// buffer := bytes.NewBuffer(nil)
 	// defer func() { log.Println("recv:", conn.LocalAddr(), hex.Dump(buffer.Bytes())) }()
 
