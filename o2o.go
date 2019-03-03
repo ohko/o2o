@@ -1,9 +1,9 @@
 package o2o
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -16,8 +16,8 @@ import (
 const (
 	CMDMSG     = "\x00" // 普通信息
 	CMDCLIENT  = "\x01" // 1.客户端请求TCP隧道服务
-	CMDREQUEST = "\x02" // 2.服务器发送浏览器请求服务
-	CMDSUCCESS = "\x03" // 3.服务器监听成功
+	CMDSUCCESS = "\x02" // 2.服务器监听成功
+	CMDREQUEST = "\x03" // 3.服务器发送浏览器请求服务
 	CMDTENNEL  = "\x04" // 4.客户端建立TCP隧道连接
 	signWord   = 0x4B48 // HK
 )
@@ -40,109 +40,102 @@ func conn2IP(conn net.Conn) string {
 
 // 发送数据
 func send(conn net.Conn, cmd, data string) error {
-	dataBuf := make([]byte, len(cmd)+len(data))
-	copy(dataBuf, cmd)
-	copy(dataBuf[len(cmd):], data)
+	// 标志2+CRC2+长度4+len(CMD)+len(data)
+	sum := 8 + len(cmd) + len(data)
+	dataBuf := make([]byte, sum)
+	// defer func() { log.Println("send:", conn.RemoteAddr(), "\n"+hex.Dump(dataBuf)) }()
 
-	// buffer := bytes.NewBuffer(nil)
-	// defer func() { log.Println("send:", conn.RemoteAddr(), hex.Dump(buffer.Bytes())) }()
+	// CMD
+	copy(dataBuf[8:], cmd)
+
+	// data
+	copy(dataBuf[8+len(cmd):], data)
 
 	// 标识位
-	sign := make([]byte, 2)
-	binary.LittleEndian.PutUint16(sign, signWord)
-	if _, err := conn.Write(sign); err != nil {
-		return err
-	}
-	// buffer.Write(sign)
+	binary.LittleEndian.PutUint16(dataBuf, signWord)
 
 	// CRC
-	icrc := make([]byte, 2)
-	binary.LittleEndian.PutUint16(icrc, crc(dataBuf))
-	if _, err := conn.Write(icrc); err != nil {
-		return err
-	}
-	// buffer.Write(icrc)
+	binary.LittleEndian.PutUint16(dataBuf[2:], crc(dataBuf[8:]))
 
 	// 数据长度
-	size := make([]byte, 4)
-	binary.LittleEndian.PutUint32(size, uint32(len(dataBuf)))
-	if _, err := conn.Write(size); err != nil {
-		return err
-	}
-	// buffer.Write(size)
+	binary.LittleEndian.PutUint32(dataBuf[4:], uint32(len(cmd)+len(data)))
 
 	// 数据
-	if _, err := conn.Write(dataBuf); err != nil {
+	n, err := conn.Write(dataBuf)
+	if err != nil {
 		return err
 	}
-	// buffer.Write(dataBuf)
+	if n != sum {
+		return fmt.Errorf("%d!=%d", sum, n)
+	}
 
 	return nil
 }
 
 // 接收数据
 func recv(conn net.Conn) ([]byte, error) {
-	// buffer := bytes.NewBuffer(nil)
-	// defer func() { log.Println("recv:", conn.LocalAddr(), hex.Dump(buffer.Bytes())) }()
+	var header, buf []byte
+	var err error
+	// defer func() { log.Println("recv:", conn.LocalAddr(), "\n"+hex.Dump(header)+hex.Dump(buf)) }()
 
-	// 读取2字节，判断标志
-	sign, err := recvHelper(conn, 2)
+	// 预取8字节，标志2+CRC2+长度4
+	header, err = recvHelper(conn, 8)
 	if err != nil {
 		return nil, err
 	}
-	// buffer.Write(sign)
-	if binary.LittleEndian.Uint16(sign) != signWord {
+
+	// 读取2字节，判断标志
+	if binary.LittleEndian.Uint16(header[:2]) != signWord {
 		return nil, errors.New("sign error")
 	}
 
-	// 读取2字节，判断CRC
-	icrc, err := recvHelper(conn, 2)
-	if err != nil {
-		return nil, err
-	}
-	// buffer.Write(icrc)
-
 	// 读取数据长度
-	bsize, err := recvHelper(conn, 4)
-	if err != nil {
-		return nil, err
-	}
-	// buffer.Write(bsize)
-	size := binary.LittleEndian.Uint32(bsize)
+	size := binary.LittleEndian.Uint32(header[4:])
 	if size <= 0 {
 		return nil, errors.New("size error")
 	}
 
 	// 3. 读取数据
-	buf, err := recvHelper(conn, int(size))
-	// buffer.Write(buf)
+	buf, err = recvHelper(conn, int(size))
 
-	if binary.LittleEndian.Uint16(icrc) != crc(buf) {
+	if binary.LittleEndian.Uint16(header[2:4]) != crc(buf) {
 		return nil, errors.New("crc error")
 	}
 	return buf, nil
 }
 
+// 读取足够量的数据，返回数据副本
 func recvHelper(conn net.Conn, size int) ([]byte, error) {
-	buf := bytes.NewBuffer(nil)
+	buf := make([]byte, size)
+	bufPos := 0
 	tmpBuf := make([]byte, size)
-	for { // 从数据流读取足够量的数据
+	for {
 		n, err := conn.Read(tmpBuf)
 		if err != nil {
 			return nil, err
 		}
-		buf.Write(tmpBuf[:n])
 
-		// 够了
-		if buf.Len() == int(size) {
+		// 一次就拿到预期值，直接返回数据
+		if bufPos == 0 && n == size {
+			return tmpBuf[:n], nil
+		}
+
+		// 移动拿到的数据
+		copy(buf[bufPos:], tmpBuf[:n])
+		bufPos += n
+
+		// 如果够了
+		if bufPos == size {
 			break
 		}
 
 		// 继续读取差额数据量
-		tmpBuf = make([]byte, int(size)-buf.Len())
+		tmpBuf = make([]byte, size-bufPos)
 	}
-	return buf.Bytes(), nil
+	return buf, nil
 }
+
+// 数据校验
 func crc(data []byte) uint16 {
 	size := len(data)
 	crc := 0xFFFF

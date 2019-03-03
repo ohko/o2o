@@ -56,11 +56,12 @@ func (o *Server) listen(conn net.Conn) {
 	for {
 		data, err := recv(conn)
 		if err != nil {
+			log.Println(err)
 			return
 		}
 
 		cmd, ext := string(data[0]), string(data[1:])
-		switch string(cmd) {
+		switch cmd {
 		case CMDCLIENT:
 			log.Println("req:", conn2IP(conn), ext)
 			go o.createListen(ext, conn)

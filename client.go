@@ -61,35 +61,41 @@ func (o *Client) listen() {
 	for {
 		data, err := recv(o.client)
 		if err != nil {
+			log.Println(err)
 			return
 		}
 
-		cmd, ext := string(data[0]), string(data[1:])
-		switch string(cmd) {
-		case CMDMSG:
-			log.Println("msg:", ext)
-		case CMDSUCCESS:
-			log.Println("success:", ext)
-			if o.onSuccess != nil {
-				o.onSuccess(ext)
-			}
-		case CMDREQUEST:
-			tmp := strings.Split(o.proxyPort, ":")
-			loc, err := net.Dial("tcp", strings.Join(tmp[1:], ":"))
-			if err != nil {
-				log.Println(err)
-				return
-			}
+		go func(cmd, ext string) {
+			switch cmd {
+			case CMDMSG:
+				log.Println("msg:", ext)
+			case CMDSUCCESS:
+				log.Println("success:", ext)
+				if o.onSuccess != nil {
+					o.onSuccess(ext)
+				}
+			case CMDREQUEST:
+				tmp := strings.Split(o.proxyPort, ":")
+				loc, err := net.Dial("tcp", strings.Join(tmp[1:], ":"))
+				if err != nil {
+					log.Println(err)
+					return
+				}
 
-			cs, err := net.Dial("tcp", o.serverPort)
-			if err != nil {
-				log.Println(err)
-				return
-			}
+				cs, err := net.Dial("tcp", o.serverPort)
+				if err != nil {
+					loc.Close()
+					log.Println(err)
+					return
+				}
 
-			send(cs, CMDTENNEL, ext)
-			go io.Copy(loc, cs)
-			go io.Copy(cs, loc)
-		}
+				go io.Copy(loc, cs)
+				go io.Copy(cs, loc)
+				if err := send(cs, CMDTENNEL, ext); err != nil {
+					loc.Close()
+					cs.Close()
+				}
+			}
+		}(string(data[0]), string(data[1:]))
 	}
 }
