@@ -1,25 +1,25 @@
 package o2o
 
 import (
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/binary"
-	"errors"
-	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 )
 
 // ...
 const (
-	CMDMSG     = "\x00" // 普通信息
-	CMDCLIENT  = "\x01" // 1.客户端请求TCP隧道服务
-	CMDSUCCESS = "\x02" // 2.服务器监听成功
-	CMDREQUEST = "\x03" // 3.服务器发送浏览器请求服务
-	CMDTENNEL  = "\x04" // 4.客户端建立TCP隧道连接
+	CMDMSG     = 0      // 普通信息
+	CMDTUNNEL  = 1      // 1.客户端请求TCP隧道服务
+	CMDSUCCESS = 2      // 2.服务器监听成功
+	CMDDATA    = 3      // 3.数据流
+	CMDCLOSE   = 4      // 4.浏览器关闭连接
 	signWord   = 0x4B48 // HK
+	bufferSize = 1024 * 1024
 )
 
 var (
@@ -27,6 +27,12 @@ var (
 	aesKey    [32]byte
 	aesIV     [16]byte
 )
+
+type tunnelInfo struct {
+	addr string
+	conn net.Conn     // client -> server
+	srv  net.Listener // server端的listener
+}
 
 func init() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
@@ -39,138 +45,41 @@ func WaitCtrlC() {
 	<-c
 }
 
-// 返回IP地址
-func conn2IP(conn net.Conn) string {
-	return strings.Split(conn.RemoteAddr().String(), ":")[0]
-}
-
-// 发送数据
-func send(conn net.Conn, cmd, data string) error {
-	// 标志2+CRC2+长度4+len(CMD)+len(data)
-	sum := 8 + len(cmd) + len(data)
+func enData(client, addr string, data []byte) []byte {
+	sum := 2 + len(client) + 2 + len(addr) + 4 + len(data)
 	dataBuf := make([]byte, sum)
-	// defer func() { log.Println("send:", conn.RemoteAddr(), "\n"+hex.Dump(dataBuf)) }()
+	// defer func() { log.Println("send:\n" + hex.Dump(dataBuf)) }()
 
-	// CMD
-	copy(dataBuf[8:], cmd)
+	len1 := len(client)
+	binary.LittleEndian.PutUint16(dataBuf[0:2], uint16(len1))
+	copy(dataBuf[2:2+len1], []byte(client))
 
-	// data
-	copy(dataBuf[8+len(cmd):], data)
+	len2 := len(addr)
+	binary.LittleEndian.PutUint16(dataBuf[2+len1:], uint16(len2))
+	copy(dataBuf[2+len1+2:], []byte(addr))
 
-	// 标识位
-	binary.LittleEndian.PutUint16(dataBuf, signWord)
+	len3 := len(data)
+	binary.LittleEndian.PutUint16(dataBuf[2+len1+2+len2:], uint16(len3))
+	copy(dataBuf[2+len1+2+len2+4:], data)
 
-	if aesEnable {
-		bs, err := aesEncode(dataBuf[8:])
-		if err != nil {
-			return err
-		}
-		copy(dataBuf[8:], bs)
-	}
-
-	// CRC
-	binary.LittleEndian.PutUint16(dataBuf[2:], crc(dataBuf[8:]))
-
-	// 数据长度
-	binary.LittleEndian.PutUint32(dataBuf[4:], uint32(len(cmd)+len(data))+signWord)
-
-	// 数据
-	n, err := conn.Write(dataBuf)
-	if err != nil {
-		return err
-	}
-	if n != sum {
-		return fmt.Errorf("%d!=%d", sum, n)
-	}
-
-	return nil
+	return dataBuf
 }
 
-// 接收数据
-func recv(conn net.Conn) ([]byte, error) {
-	var header, buf []byte
-	var err error
-	// defer func() { log.Println("recv:", conn.LocalAddr(), "\n"+hex.Dump(header)+hex.Dump(buf)) }()
-
-	// 预取8字节，标志2+CRC2+长度4
-	header, err = recvHelper(conn, 8)
-	if err != nil {
-		return nil, err
-	}
-
-	// 读取2字节，判断标志
-	if binary.LittleEndian.Uint16(header[:2]) != signWord {
-		return nil, errors.New("sign error")
-	}
-
-	// 读取数据长度
-	size := binary.LittleEndian.Uint32(header[4:]) - signWord
-	if size <= 0 {
-		return nil, errors.New("size error")
-	}
-
-	// 读取数据
-	buf, err = recvHelper(conn, int(size))
-
-	if binary.LittleEndian.Uint16(header[2:4]) != crc(buf) {
-		return nil, errors.New("crc error")
-	}
-
-	if aesEnable {
-		bs, err := aesEncode(buf)
-		if err != nil {
-			return nil, err
-		}
-		copy(buf, bs)
-	}
-
-	return buf, nil
+func deData(data []byte) (string, string, []byte) {
+	// log.Println("recv:\n" + hex.Dump(data))
+	len1 := binary.LittleEndian.Uint16(data[0:2])
+	len2 := binary.LittleEndian.Uint16(data[2+len1:])
+	return string(data[2 : 2+len1]), string(data[2+len1+2 : 2+len1+2+len2]), data[2+len1+2+len2+4:]
 }
 
-// 读取足够量的数据，返回数据副本
-func recvHelper(conn net.Conn, size int) ([]byte, error) {
-	buf := make([]byte, size)
-	bufPos := 0
-	tmpBuf := make([]byte, size)
-	for {
-		n, err := conn.Read(tmpBuf)
-		if err != nil {
-			return nil, err
-		}
-
-		// 一次就拿到预期值，直接返回数据
-		if bufPos == 0 && n == size {
-			return tmpBuf[:n], nil
-		}
-
-		// 移动拿到的数据
-		copy(buf[bufPos:], tmpBuf[:n])
-		bufPos += n
-
-		// 如果够了
-		if bufPos == size {
-			break
-		}
-
-		// 继续读取差额数据量
-		tmpBuf = make([]byte, size-bufPos)
+func aesEncode(data []byte) []byte {
+	if !aesEnable {
+		return data
 	}
-	return buf, nil
-}
+	block, _ := aes.NewCipher(aesKey[:])
+	buf := make([]byte, len(data))
 
-// 数据校验
-func crc(data []byte) uint16 {
-	size := len(data)
-	crc := 0xFFFF
-	for i := 0; i < size; i++ {
-		crc = (crc >> 8) ^ int(data[i])
-		for j := 0; j < 8; j++ {
-			flag := crc & 0x0001
-			crc >>= 1
-			if flag == 1 {
-				crc ^= 0xA001
-			}
-		}
-	}
-	return uint16(crc)
+	stream := cipher.NewCTR(block, aesIV[:])
+	stream.XORKeyStream(buf, data)
+	return buf
 }

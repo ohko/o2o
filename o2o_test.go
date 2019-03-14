@@ -3,8 +3,11 @@ package o2o
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -17,10 +20,11 @@ func serivces() {
 	if err := (&Server{}).Start(key, serverPort); err != nil {
 		log.Fatal(err)
 	}
+	time.Sleep(time.Microsecond * 100)
 
 	chSuccess := make(chan bool)
 	success := func(msg string) {
-		log.Println(msg)
+		log.Println("SUCCESS:", msg)
 		if msg == proxyPort {
 			chSuccess <- true
 		}
@@ -58,7 +62,7 @@ func serivces() {
 
 	select {
 	case <-chSuccess:
-	case <-time.After(time.Second):
+	case <-time.After(time.Second * 3):
 		log.Fatal("timeout")
 	}
 }
@@ -75,25 +79,54 @@ func reverse(data []byte) []byte {
 func TestServerClient(t *testing.T) {
 	serivces()
 
-	conn, err := net.Dial("tcp", ":2345")
-	if err != nil {
-		t.Fatal(err)
+	var wg sync.WaitGroup
+	fn := func(msg []byte) {
+		conn, err := net.Dial("tcp", ":2345")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := conn.Write(msg); err != nil {
+			t.Fatal(err)
+		}
+
+		buf := make([]byte, 1024)
+		n, err := conn.Read(buf)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if bytes.Compare(msg, reverse(buf[:n])) != 0 {
+			log.Println(hex.Dump(msg))
+			log.Println(hex.Dump(reverse(buf[:n])))
+			t.Fail()
+		}
+		wg.Done()
 	}
 
-	msg := []byte("12345678")
-	if _, err := conn.Write(msg); err != nil {
-		t.Fatal(err)
+	count := 100
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		go fn([]byte(fmt.Sprintf("12345678%d", i)))
 	}
 
-	buf := make([]byte, 1024)
-	n, err := conn.Read(buf)
-	if err != nil {
-		t.Fatal(err)
+	wg.Wait()
+}
+
+func TestAesEncode(t *testing.T) {
+	texts := [][]byte{
+		[]byte(strings.Repeat(".", 3)),
+		[]byte(strings.Repeat(".", 0x10)),
 	}
 
-	if bytes.Compare(msg, reverse(buf[:n])) != 0 {
-		log.Println(hex.Dump(msg))
-		log.Println(hex.Dump(reverse(buf[:n])))
-		t.Fail()
+	for _, v := range texts {
+		en := aesEncode(v)
+		fmt.Println(hex.Dump(en))
+		de := aesEncode(en)
+		fmt.Println(hex.Dump(de))
+
+		if bytes.Compare(v, de) != 0 {
+			t.Fail()
+		}
 	}
 }
