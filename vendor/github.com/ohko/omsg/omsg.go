@@ -2,11 +2,19 @@ package omsg
 
 import (
 	"encoding/binary"
-	"errors"
 	"io"
 	"net"
 	"sync"
 )
+
+// DataError omsg error
+type DataError struct {
+	msg string
+}
+
+func (e *DataError) Error() string {
+	return e.msg
+}
 
 type head struct {
 	Sign uint16 // 2数据标志 HK
@@ -63,7 +71,7 @@ func recv(conn net.Conn) (uint16, uint16, []byte, error) {
 	// log.Println("recv header:\n" + hex.Dump(header))
 
 	if signWord != binary.LittleEndian.Uint16(header) {
-		return 0, 0, nil, errors.New("sign err")
+		return 0, 0, nil, &DataError{msg: "sign err"}
 	}
 	icrc := binary.LittleEndian.Uint16(header[2:])
 	cmd := binary.LittleEndian.Uint16(header[4:])
@@ -76,7 +84,7 @@ func recv(conn net.Conn) (uint16, uint16, []byte, error) {
 	// log.Println("recv buffer:\n" + hex.Dump(buffer))
 
 	if icrc != crc(buffer) {
-		return 0, 0, nil, errors.New("crc err")
+		return 0, 0, nil, &DataError{msg: "crc err"}
 	}
 
 	return cmd, ext, buffer, nil

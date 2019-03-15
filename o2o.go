@@ -4,6 +4,7 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -82,4 +83,10 @@ func aesEncode(data []byte) []byte {
 	stream := cipher.NewCTR(block, aesIV[:])
 	stream.XORKeyStream(buf, data)
 	return buf
+}
+
+func outFakeMsg(conn net.Conn) {
+	defer conn.Close()
+	msg := "Please sign in first!\n"
+	conn.Write([]byte(fmt.Sprintf("HTTP/1.1 404 OK\r\nAccept-Ranges: bytes\r\nContent-Length: %d\r\nContent-Type: text/html; charset=utf-8\nServer: nginx/1.0\r\n\r\n%s", len(msg), msg)))
 }

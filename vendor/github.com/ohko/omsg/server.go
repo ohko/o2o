@@ -1,7 +1,6 @@
 package omsg
 
 import (
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -52,23 +51,25 @@ func (o *Server) hServer(conn net.Conn) {
 		go o.OnNewClient(conn)
 	}
 
-	for {
-		cmd, ext, bs, err := recv(conn)
-		if err != nil && err == io.EOF {
-			break
-		}
-		if o.OnData != nil {
-			o.OnData(conn, cmd, ext, bs, err)
-		}
-	}
+	// 从客户端列表移除
+	defer o.clientList.Delete(conn)
 
 	// 断线
 	if o.OnClientClose != nil {
-		go o.OnClientClose(conn)
+		defer o.OnClientClose(conn)
 	}
 
-	// 从客户端列表移除
-	o.clientList.Delete(conn)
+	for {
+		cmd, ext, bs, err := recv(conn)
+		switch err.(type) {
+		case *DataError, nil:
+			if o.OnData != nil {
+				o.OnData(conn, cmd, ext, bs, err)
+			}
+		default:
+			return
+		}
+	}
 }
 
 // SendToAll 向所有客户端发送数据
