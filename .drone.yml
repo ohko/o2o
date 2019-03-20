@@ -5,8 +5,8 @@ steps:
 - name: golang
   image: golang:1.12
   commands:
-  - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./docker/server -ldflags "-s -w" ./server
-  - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./docker/client -ldflags "-s -w" ./client
+  - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o server_linux -ldflags "-s -w" ./server
+  - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o client_linux -ldflags "-s -w" ./client
 
 - name: docker
   image: plugins/docker

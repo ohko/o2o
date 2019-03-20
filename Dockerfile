@@ -1,3 +1,3 @@
 FROM scratch
-ADD server /
-ADD client /
+ADD server_linux /server
+ADD client_linux /client
