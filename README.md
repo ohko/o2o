@@ -1,3 +1,5 @@
+[![Build Status](https://drone.cdeyun.com/api/badges/cdeyun.com/o2o/status.svg)](https://drone.cdeyun.com/cdeyun.com/o2o)
+
 # TCP 隧道
 
 ## Build

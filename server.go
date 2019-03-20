@@ -93,6 +93,7 @@ func (o *Server) createListen(tunnel *tunnelInfo) {
 
 	web, err := net.Listen("tcp", ":"+port)
 	if err != nil {
+		defer tunnel.conn.Close()
 		log.Println(err)
 		if err := o.oserv.Send(tunnel.conn, CMDMSG, 0, aesEncode([]byte(err.Error()))); err != nil {
 			log.Println(err)

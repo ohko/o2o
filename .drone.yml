@@ -1,0 +1,45 @@
+kind: pipeline
+name: default
+
+steps:
+- name: golang
+  image: golang:1.12
+  commands:
+  - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./docker/server -ldflags "-s -w" ./server
+  - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ./docker/client -ldflags "-s -w" ./client
+
+- name: docker
+  image: plugins/docker
+  settings:
+    repo: registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o
+    registry: registry.cn-shenzhen.aliyuncs.com
+    username:
+      from_secret: docker_username
+    password:
+      from_secret: docker_password
+
+- name: ssh
+  image: appleboy/drone-ssh
+  settings:
+    host:
+      - cdeyun.com
+    username: root
+    ssh_key:
+      from_secret: ssh_key
+    script:
+      - docker pull registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o
+      - docker rm -fv o2o
+      - docker run -d --restart=always --name o2o -p 2399:2399 -p 127.0.0.1:5001:5001 registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o /server -s :2399
+      - for i in `docker images |grep "<none>"|awk '{print $3}'`;do docker image rm $i;done
+      - for i in `docker images |grep "Removal In Progress"|awk '{print $1}'`;do docker rm -fv $i;done
+
+- name: finish
+  image: golang:1.12
+  when:
+    status: [ success, failure ]
+  commands:
+  - if [ $DRONE_BUILD_STATUS = "success" ];then
+  -   curl -X POST 'https://msg.cdeyun.com/weixin' -d "account=2&msgType=news&toUser=hk&title=✅${DRONE_REPO_NAME}&description=${DRONE_REPO}:${DRONE_COMMIT_BRANCH}#${DRONE_BUILD_NUMBER}&url=${DRONE_BUILD_LINK}"
+  - else
+  -   curl -X POST 'https://msg.cdeyun.com/weixin' -d "account=2&msgType=news&toUser=hk&title=❌${DRONE_REPO_NAME}&description=${DRONE_REPO}:${DRONE_COMMIT_BRANCH}#${DRONE_BUILD_NUMBER}&url=${DRONE_BUILD_LINK}"
+  - fi
