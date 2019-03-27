@@ -53,8 +53,8 @@ func (o *Server) onNewClient(conn net.Conn) {
 func (o *Server) onClientClose(conn net.Conn) {
 	if web, ok := o.srvs.Load(conn); ok {
 		web.(net.Listener).Close()
+		o.srvs.Delete(conn)
 	}
-	o.srvs.Delete(conn)
 	log.Println("client close:", conn.RemoteAddr())
 }
 func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte, err error) {
@@ -90,6 +90,20 @@ func (o *Server) createListen(tunnel *tunnelInfo) {
 		return
 	}
 	port := tmp[0]
+
+	// 关闭之前的监听
+	o.srvs.Range(func(conn, web interface{}) bool {
+		tmp := strings.Split(web.(net.Listener).Addr().String(), ":")
+		if tmp[len(tmp)-1] == port {
+			log.Println("Close:", port)
+			web.(net.Listener).Close()
+			conn.(net.Conn).Close()
+			o.srvs.Delete(conn)
+			time.Sleep(time.Second)
+			return false
+		}
+		return true
+	})
 
 	web, err := net.Listen("tcp", ":"+port)
 	if err != nil {
@@ -151,5 +165,5 @@ func (o *Server) createListen(tunnel *tunnelInfo) {
 	}
 
 	o.srvs.Delete(tunnel.conn)
-	log.Println("close:", port)
+	log.Println("closed:", port)
 }
