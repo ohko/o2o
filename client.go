@@ -49,7 +49,8 @@ func (o *Client) onClose() {
 		o.Reconnect()
 	}
 }
-func (o *Client) onData(cmd, ext uint16, data []byte, err error) {
+func (o *Client) onData(cmd, ext uint16, data []byte) {
+	var err error
 	data = aesEncode(data)
 
 	switch cmd {

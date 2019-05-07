@@ -2,19 +2,10 @@ package omsg
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
-	"sync"
 )
-
-// DataError omsg error
-type DataError struct {
-	msg string
-}
-
-func (e *DataError) Error() string {
-	return e.msg
-}
 
 type head struct {
 	Sign uint16 // 2数据标志 HK
@@ -24,19 +15,14 @@ type head struct {
 	Size uint32 // 4数据大小
 }
 
-var headSize = binary.Size(head{})
-var sendLock sync.Mutex
-
-const (
-	signWord = 0x4B48 // HK
-)
+const signWord = 0x4B48            // 标志HK
+var headSize = binary.Size(head{}) // 头尺寸
 
 func send(conn net.Conn, cmd, ext uint16, data []byte) error {
-	// make buffer, sign+2 crc+2 size+4 len(data)
-	buffer := make([]byte, 0xC+len(data))
+	buffer := make([]byte, headSize+len(data))
 	// defer func() { log.Println("send:\n" + hex.Dump(buffer)) }()
 
-	// sign
+	// Sign
 	binary.LittleEndian.PutUint16(buffer, signWord)
 
 	// CRC
@@ -52,7 +38,7 @@ func send(conn net.Conn, cmd, ext uint16, data []byte) error {
 	binary.LittleEndian.PutUint32(buffer[8:], uint32(len(data)))
 
 	// data
-	copy(buffer[0xC:], data)
+	copy(buffer[headSize:], data)
 
 	// send
 	if _, err := conn.Write(buffer); err != nil {
@@ -64,27 +50,39 @@ func send(conn net.Conn, cmd, ext uint16, data []byte) error {
 
 func recv(conn net.Conn) (uint16, uint16, []byte, error) {
 
-	header := make([]byte, 0xC)
+	header := make([]byte, headSize)
 	if _, err := io.ReadFull(conn, header); err != nil {
 		return 0, 0, nil, err
 	}
 	// log.Println("recv header:\n" + hex.Dump(header))
 
+	// Sign
 	if signWord != binary.LittleEndian.Uint16(header) {
-		return 0, 0, nil, &DataError{msg: "sign err"}
+		return 0, 0, nil, errors.New("sign err")
 	}
+
+	// CRC
 	icrc := binary.LittleEndian.Uint16(header[2:])
+
+	// Cmd
 	cmd := binary.LittleEndian.Uint16(header[4:])
+
+	// Ext
 	ext := binary.LittleEndian.Uint16(header[6:])
+
+	// data length
 	size := binary.LittleEndian.Uint32(header[8:])
+
+	// data
 	buffer := make([]byte, int(size))
 	if _, err := io.ReadFull(conn, buffer); err != nil {
 		return 0, 0, nil, err
 	}
 	// log.Println("recv buffer:\n" + hex.Dump(buffer))
 
+	// check crc
 	if icrc != crc(buffer) {
-		return 0, 0, nil, &DataError{msg: "crc err"}
+		return 0, 0, nil, errors.New("crc err")
 	}
 
 	return cmd, ext, buffer, nil
@@ -92,9 +90,9 @@ func recv(conn net.Conn) (uint16, uint16, []byte, error) {
 
 func crc(data []byte) uint16 {
 	size := len(data)
-	crc := 0xFFFF
+	crc := uint16(0xFFFF)
 	for i := 0; i < size; i++ {
-		crc = (crc >> 8) ^ int(data[i])
+		crc = (crc >> 8) ^ uint16(data[i])
 		for j := 0; j < 8; j++ {
 			flag := crc & 0x0001
 			crc >>= 1
@@ -103,5 +101,5 @@ func crc(data []byte) uint16 {
 			}
 		}
 	}
-	return uint16(crc)
+	return crc
 }

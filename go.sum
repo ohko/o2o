@@ -1,4 +1,2 @@
-github.com/ohko/omsg v0.0.0-20190313043747-724915022cc9 h1:oV2ebwqvrw2LcKtNwLgZm4YZfHMLXsoVV3Ck15fdVko=
-github.com/ohko/omsg v0.0.0-20190313043747-724915022cc9/go.mod h1:LCA7D0D6uQ+exHFBEFt6vF3N5KjpGuisr5S1aExQMSg=
-github.com/ohko/omsg v0.0.0-20190315005618-4b6886943868 h1:0M4YqmqwDj+xETNprKmOydj4Wq1S0SgspCkiyzSDJk4=
-github.com/ohko/omsg v0.0.0-20190315005618-4b6886943868/go.mod h1:LCA7D0D6uQ+exHFBEFt6vF3N5KjpGuisr5S1aExQMSg=
+github.com/ohko/omsg v1.0.0 h1:OARKaEFxpi7p8y49YVU1lTZkB7Y/9auaKqyuhzyAyYw=
+github.com/ohko/omsg v1.0.0/go.mod h1:LCA7D0D6uQ+exHFBEFt6vF3N5KjpGuisr5S1aExQMSg=

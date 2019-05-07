@@ -4,7 +4,6 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -14,12 +13,11 @@ import (
 
 // ...
 const (
-	CMDMSG     = 0      // 普通信息
-	CMDTUNNEL  = 1      // 1.客户端请求TCP隧道服务
-	CMDSUCCESS = 2      // 2.服务器监听成功
-	CMDDATA    = 3      // 3.数据流
-	CMDCLOSE   = 4      // 4.浏览器关闭连接
-	signWord   = 0x4B48 // HK
+	CMDMSG     = 0 // 普通信息
+	CMDTUNNEL  = 1 // 1.客户端请求TCP隧道服务
+	CMDSUCCESS = 2 // 2.服务器监听成功
+	CMDDATA    = 3 // 3.数据流
+	CMDCLOSE   = 4 // 4.浏览器关闭连接
 	bufferSize = 1024 * 1024
 )
 
@@ -83,10 +81,4 @@ func aesEncode(data []byte) []byte {
 	stream := cipher.NewCTR(block, aesIV[:])
 	stream.XORKeyStream(buf, data)
 	return buf
-}
-
-func outFakeMsg(conn net.Conn) {
-	defer conn.Close()
-	msg := "Please sign in first!\n"
-	conn.Write([]byte(fmt.Sprintf("HTTP/1.1 404 OK\r\nAccept-Ranges: bytes\r\nContent-Length: %d\r\nContent-Type: text/html; charset=utf-8\nServer: nginx/1.0\r\n\r\n%s", len(msg), msg)))
 }

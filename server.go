@@ -57,12 +57,7 @@ func (o *Server) onClientClose(conn net.Conn) {
 	}
 	log.Println("client close:", conn.RemoteAddr())
 }
-func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte, err error) {
-	if err != nil {
-		outFakeMsg(conn)
-		return
-	}
-
+func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte) {
 	data = aesEncode(data)
 
 	switch cmd {

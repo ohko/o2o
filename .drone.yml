@@ -11,8 +11,7 @@ steps:
 - name: docker
   image: plugins/docker
   settings:
-    repo: registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o
-    registry: registry.cn-shenzhen.aliyuncs.com
+    repo: ohko/o2o
     username:
       from_secret: docker_username
     password:
@@ -26,10 +25,12 @@ steps:
     username: root
     ssh_key:
       from_secret: ssh_key
+    aes_key:
+      from_secret: aes_key
     script:
-      - docker pull registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o
+      - docker pull ohko/o2o
       - docker rm -fv o2o
-      - docker run -d --restart=always --name o2o -p 2399:2399 -p 127.0.0.1:5001:5001 registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o /server -s :2399
+      - docker run -d --restart=always --name o2o -p 2399:2399 -p 127.0.0.1:5001:5001 ohko/o2o /server -s=:2399 -key=${PLUGIN_AES_KEY}
       - for i in `docker images |grep "<none>"|awk '{print $3}'`;do docker image rm $i;done
       - for i in `docker ps -a |grep "Removal In Progress"|awk '{print $1}'`;do docker rm -fv $i;done
 
