@@ -94,7 +94,7 @@ func (o *Server) createListen(tunnel *tunnelInfo) {
 			web.(net.Listener).Close()
 			conn.(net.Conn).Close()
 			o.srvs.Delete(conn)
-			time.Sleep(time.Second)
+			time.Sleep(time.Second * 3)
 			return false
 		}
 		return true

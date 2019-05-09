@@ -46,6 +46,8 @@ func (o *Client) Start(key, serverPort, proxyPort string, reconnect bool, onSucc
 func (o *Client) onClose() {
 	log.Println("connect closed")
 	if o.reconnect {
+		// 断线后延时3秒再重连
+		time.Sleep(time.Second * 3)
 		o.Reconnect()
 	}
 }
