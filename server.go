@@ -20,6 +20,12 @@ type Server struct {
 	brows      sync.Map
 }
 
+// 浏览器信息
+type browserInfo struct {
+	conn    net.Conn // 浏览器连接
+	flowing chan int // 浏览器流量是否流动中，用于空闲自动断线
+}
+
 // Start 启动服务
 func (o *Server) Start(key, serverPort string) error {
 	o.serverPort = serverPort
@@ -71,13 +77,17 @@ func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte) {
 		client, _, data := deData(aesEncode(data))
 		// log.Println("向浏览器发送：\n" + hex.Dump(data))
 		if browser, ok := o.brows.Load(client); ok {
-			browser.(net.Conn).Write(data)
+			browser.(*browserInfo).conn.Write(data)
+			select {
+			case browser.(*browserInfo).flowing <- 1:
+			default:
+			}
 		}
 	case CMDLOCALCLOSE:
 		client, _, data := deData(aesEncode(data))
 		log.Println("client server error:", string(data))
 		if browser, ok := o.brows.Load(client); ok {
-			browser.(net.Conn).Close()
+			browser.(*browserInfo).conn.Close()
 		}
 	}
 }
@@ -132,8 +142,10 @@ func (o *Server) createListen(tunnel *tunnelInfo) {
 
 // 处理浏览器数据
 func (o *Server) handleBrowser(tunnel *tunnelInfo, conn net.Conn) {
+	bi := &browserInfo{conn: conn, flowing: make(chan int, 1)}
+
 	// 保存/删除broswer连接
-	o.brows.Store(conn.RemoteAddr().String(), conn)
+	o.brows.Store(conn.RemoteAddr().String(), bi)
 	defer func() {
 		o.brows.Delete(conn.RemoteAddr().String())
 
@@ -143,19 +155,19 @@ func (o *Server) handleBrowser(tunnel *tunnelInfo, conn net.Conn) {
 		}
 	}()
 
-	recvedData := make(chan int)
-	go func(conn net.Conn) {
+	// recvedData := make(chan int)
+	go func(bi *browserInfo) {
 		for { // 本地超过30秒没有数据就关闭连接
 			select {
 			case <-time.After(time.Second * 30):
 				// log.Println("\033[32m强制关闭:" + conn.RemoteAddr().String() + "\033[m")
-				conn.Close()
+				bi.conn.Close()
 				return
-			case <-recvedData:
+			case <-bi.flowing:
 				// log.Printf("\033[32m收到数据:["+conn.RemoteAddr().String()+"] %d\033[m\n", n)
 			}
 		}
-	}(conn)
+	}(bi)
 
 	buf := make([]byte, bufferSize)
 	for {
@@ -163,7 +175,11 @@ func (o *Server) handleBrowser(tunnel *tunnelInfo, conn net.Conn) {
 		if err != nil {
 			break
 		}
-		recvedData <- n
+
+		select {
+		case bi.flowing <- n:
+		default:
+		}
 
 		// 浏览器数据转发到client
 		if err := o.oserv.Send(tunnel.conn, CMDDATA, 0, aesEncode(enData(conn.RemoteAddr().String(), tunnel.addr, buf[:n]))); err != nil {
