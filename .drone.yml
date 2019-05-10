@@ -32,9 +32,11 @@ steps:
     script:
       - docker pull ohko/o2o
       - docker rm -fv o2o
-      - docker run -d --restart=always --name o2o -p 2399:2399 -p 127.0.0.1:5001:5001 ohko/o2o /server -s=:2399 -key=$AES_KEY
+      - docker run -d --restart=always --name o2o -p 2399:2399 -p 127.0.0.1:5001:5001 -v /usr/share/zoneinfo:/usr/share/zoneinfo:ro -e TZ=Asia/Shanghai ohko/o2o /server -s=:2399 -key=$AES_KEY
       - for i in `docker images |grep "<none>"|awk '{print $3}'`;do docker image rm $i;done
       - for i in `docker ps -a |grep "Removal In Progress"|awk '{print $1}'`;do docker rm -fv $i;done
+
+# docker pull ohko/o2o && docker rm -fv o2o; docker run --name=o2o -d --restart=always -v /usr/share/zoneinfo:/usr/share/zoneinfo:ro -e TZ=Asia/Shanghai ohko/o2o /client -s=cdeyun.com:2399 -key= -p 5001:192.168.1.241:5001
 
 - name: finish
   image: golang:1.12

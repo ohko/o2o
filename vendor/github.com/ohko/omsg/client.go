@@ -36,12 +36,12 @@ func (o *Client) ConnectTimeout(address string, timeout time.Duration) error {
 // 监听数据
 func (o *Client) hClient() {
 	defer func() {
+		o.Close()
+
 		// 回调
 		if o.OnClose != nil {
 			o.OnClose()
 		}
-
-		o.Close()
 	}()
 
 	for {

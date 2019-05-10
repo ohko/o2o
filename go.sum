@@ -1,2 +1,4 @@
 github.com/ohko/omsg v1.0.0 h1:OARKaEFxpi7p8y49YVU1lTZkB7Y/9auaKqyuhzyAyYw=
 github.com/ohko/omsg v1.0.0/go.mod h1:LCA7D0D6uQ+exHFBEFt6vF3N5KjpGuisr5S1aExQMSg=
+github.com/ohko/omsg v1.0.1 h1:phMMGTyoRPDBMdni2u+Uq0qSABki25QHP4f0zJhfM8Q=
+github.com/ohko/omsg v1.0.1/go.mod h1:LCA7D0D6uQ+exHFBEFt6vF3N5KjpGuisr5S1aExQMSg=

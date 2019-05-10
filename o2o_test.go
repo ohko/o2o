@@ -17,28 +17,24 @@ func serivces() {
 	proxyPort := "2345:127.0.0.1:5000"
 	key := "12345678"
 
+	// server
 	if err := (&Server{}).Start(key, serverPort); err != nil {
 		log.Fatal(err)
 	}
-	time.Sleep(time.Microsecond * 100)
+	time.Sleep(time.Second)
 
-	chSuccess := make(chan bool)
-	success := func(msg string) {
-		log.Println("SUCCESS:", msg)
-		if msg == proxyPort {
-			chSuccess <- true
-		}
-	}
-
-	if err := (&Client{}).Start(key, serverPort, proxyPort, false, success); err != nil {
+	// client
+	if err := (&Client{}).Start(key, serverPort, proxyPort); err != nil {
 		log.Fatal(err)
 	}
+	time.Sleep(time.Second)
 
+	// local server
 	s, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		log.Fatal(err)
 	}
-	go func() {
+	go func(s net.Listener) {
 		for {
 			conn, err := s.Accept()
 			if err != nil {
@@ -58,13 +54,7 @@ func serivces() {
 
 			conn.Close()
 		}
-	}()
-
-	select {
-	case <-chSuccess:
-	case <-time.After(time.Second * 3):
-		log.Fatal("timeout")
-	}
+	}(s)
 }
 
 func reverse(data []byte) []byte {
@@ -121,9 +111,7 @@ func TestAesEncode(t *testing.T) {
 
 	for _, v := range texts {
 		en := aesEncode(v)
-		fmt.Println(hex.Dump(en))
 		de := aesEncode(en)
-		fmt.Println(hex.Dump(de))
 
 		if bytes.Compare(v, de) != 0 {
 			t.Fail()

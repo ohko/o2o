@@ -1,2 +1,2 @@
-# github.com/ohko/omsg v1.0.0
+# github.com/ohko/omsg v1.0.1
 github.com/ohko/omsg

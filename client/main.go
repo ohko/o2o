@@ -16,7 +16,7 @@ func main() {
 	flag.Parse()
 
 	o := &o2o.Client{}
-	if err := o.Start(*key, *serverPort, *proxyPort, true, nil); err != nil {
+	if err := o.Start(*key, *serverPort, *proxyPort); err != nil {
 		log.Fatal(err)
 	}
 
