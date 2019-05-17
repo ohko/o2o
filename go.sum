@@ -1,3 +1,7 @@
+github.com/ohko/logger v0.0.0-20190513140219-f177d86823a0 h1:Jf6R/Yjy3z8LTezRn40HG7k9ObYB42MChG5icD7Skoo=
+github.com/ohko/logger v0.0.0-20190513140219-f177d86823a0/go.mod h1:1jxOt4Jtt6LHo6+6JEZhYiL+VPJb5+oM5Elq+Kl93No=
+github.com/ohko/logger v0.0.0-20190517153336-aab715990ef9 h1:m+aNFnD1cNA4iIzF2n5mz0xlgSQ32BcjO5oinyvpYq0=
+github.com/ohko/logger v0.0.0-20190517153336-aab715990ef9/go.mod h1:1jxOt4Jtt6LHo6+6JEZhYiL+VPJb5+oM5Elq+Kl93No=
 github.com/ohko/omsg v1.0.0 h1:OARKaEFxpi7p8y49YVU1lTZkB7Y/9auaKqyuhzyAyYw=
 github.com/ohko/omsg v1.0.0/go.mod h1:LCA7D0D6uQ+exHFBEFt6vF3N5KjpGuisr5S1aExQMSg=
 github.com/ohko/omsg v1.0.1 h1:phMMGTyoRPDBMdni2u+Uq0qSABki25QHP4f0zJhfM8Q=

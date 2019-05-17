@@ -5,20 +5,23 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"log"
-	"net"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
+
+	"github.com/ohko/logger"
 )
 
 // ...
 const (
-	CMDMSG        = 0 // 普通信息
+	CMDHEART      = 0 // 心跳包
 	CMDTUNNEL     = 1 // 1.客户端请求TCP隧道服务
 	CMDSUCCESS    = 2 // 2.服务器监听成功
-	CMDDATA       = 3 // 3.数据流
-	CMDCLOSE      = 4 // 4.浏览器关闭连接
-	CMDLOCALCLOSE = 5 // 5.本地服务关闭或连接失败
+	CMDFAILED     = 3 // 3.服务器监听失败
+	CMDDATA       = 4 // 4.数据流
+	CMDCLOSE      = 5 // 5.浏览器关闭连接
+	CMDLOCALCLOSE = 6 // 6.本地服务关闭或连接失败
 	bufferSize    = 1024 * 1024
 )
 
@@ -26,16 +29,15 @@ var (
 	aesEnable bool
 	aesKey    [32]byte
 	aesIV     [16]byte
+	ll        = logger.NewLogger()
 )
 
-type tunnelInfo struct {
-	addr string       // tunnel请求端口
-	conn net.Conn     // client -> server
-	srv  net.Listener // server端的listener
-}
-
 func init() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	ll.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	ll.SetLevel(logger.LoggerLevel2Warning)
+	if runtime.GOOS != "darwin" {
+		ll.SetLevel(logger.LoggerLevel2Warning)
+	}
 }
 
 // WaitCtrlC 捕捉Ctrl+C

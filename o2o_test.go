@@ -10,12 +10,15 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ohko/logger"
 )
 
 func serivces() {
 	serverPort := ":2399"
 	proxyPort := "2345:127.0.0.1:5000"
 	key := "12345678"
+	ll.SetLevel(logger.LoggerLevel2Warning)
 
 	// server
 	if err := (&Server{}).Start(key, serverPort); err != nil {

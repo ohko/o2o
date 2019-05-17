@@ -11,3 +11,6 @@ docker push registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o
 docker images |grep "<none>"|awk '{print $3}'|xargs docker image rm
 
 rm -rf server_linux client_linux
+
+# docker pull registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o && docker rm -fv o2o; docker run --name=o2o -d --restart=always -p 2399:2399 -p 127.0.0.1:5001:5001 -v /usr/share/zoneinfo:/usr/share/zoneinfo:ro -e TZ=Asia/Shanghai registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o /server -s=:2399
+# docker pull registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o && docker rm -fv o2o; docker run --name=o2o -d --restart=always -v /usr/share/zoneinfo:/usr/share/zoneinfo:ro -e TZ=Asia/Shanghai registry.cn-shenzhen.aliyuncs.com/cdeyun/o2o /client -s=cdeyun.com:2399 -p 5001:192.168.1.241:5001

@@ -3,7 +3,8 @@ package o2o
 import (
 	"crypto/md5"
 	"crypto/sha256"
-	"log"
+	"encoding/hex"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -28,9 +29,9 @@ func (o *Client) Start(key, serverPort, proxyPort string) error {
 		aesEnable = true
 		aesKey = sha256.Sum256([]byte(key))
 		aesIV = md5.Sum([]byte(key))
-		log.Println("AES crypt enabled")
+		ll.Log4Trace("AES crypt enabled")
 	} else {
-		log.Println("AES crypt disabled")
+		ll.Log4Trace("AES crypt disabled")
 	}
 
 	o.ocli = omsg.NewClient()
@@ -40,7 +41,7 @@ func (o *Client) Start(key, serverPort, proxyPort string) error {
 }
 
 func (o *Client) onClose() {
-	log.Println("connect closed:", o.serverPort, o.proxyPort)
+	ll.Log4Trace("connect closed:", o.serverPort, o.proxyPort)
 
 	// 清理本地数据
 	o.conns.Range(func(key, val interface{}) bool {
@@ -55,16 +56,20 @@ func (o *Client) onClose() {
 func (o *Client) onData(cmd, ext uint16, data []byte) {
 	var err error
 	data = aesEncode(data)
-	// log.Printf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data))
+	ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
 	switch cmd {
-	case CMDMSG:
-		log.Println(string(data))
+	case CMDHEART:
+		ll.Log4Trace(string(data))
 	case CMDSUCCESS:
-		log.Println("tunnel success:", o.serverPort, string(data))
+		ll.Log4Trace("tunnel success:", o.serverPort, string(data))
+	case CMDFAILED:
+		ll.Log2Error("tunnel failed:", o.serverPort, string(data))
+		time.Sleep(time.Second * 5)
+		o.ocli.Send(CMDTUNNEL, 0, aesEncode([]byte(o.proxyPort)))
 	case CMDCLOSE:
 		if conn, ok := o.conns.Load(string(data)); ok {
-			// log.Println("关闭本地连接:", string(data))
+			ll.Log0Debug("关闭本地连接:", string(data))
 			conn.(net.Conn).Close()
 		}
 	case CMDDATA:
@@ -78,10 +83,10 @@ func (o *Client) onData(cmd, ext uint16, data []byte) {
 			tmp := strings.Split(addr, ":")
 			conn, err = net.Dial("tcp", strings.Join(tmp[1:], ":"))
 			if err != nil {
-				log.Println(err)
+				ll.Log2Error(err)
 				// 通知本地服务连接失败
-				if err := o.ocli.Send(CMDLOCALCLOSE, 0, enData(client, addr, []byte(err.Error()))); err != nil {
-					log.Println(err)
+				if err := o.ocli.Send(CMDLOCALCLOSE, 0, aesEncode(enData(client, addr, []byte(err.Error())))); err != nil {
+					ll.Log2Error(err)
 				}
 				return
 			}
@@ -97,22 +102,23 @@ func (o *Client) onData(cmd, ext uint16, data []byte) {
 					}
 
 					// 数据转发到远端
-					if err := o.ocli.Send(CMDDATA, 0, enData(client, addr, buf[:n])); err != nil {
-						log.Println(err)
+					if err := o.ocli.Send(CMDDATA, 0, aesEncode(enData(client, addr, buf[:n]))); err != nil {
+						ll.Log2Error(err)
 						// 关闭本次通道
 						conn.Close()
 					}
 				}
+				ll.Log0Debug("local close:", conn.RemoteAddr())
 			}(conn.(net.Conn))
 		}
 
 		// 远端数据转发到本地服务
 		if _, err := conn.(net.Conn).Write(browserData); err != nil {
-			log.Println(err)
+			ll.Log2Error(err)
 
 			// 通知本地服务连接失败
-			if err := o.ocli.Send(CMDLOCALCLOSE, 0, enData(client, addr, []byte(err.Error()))); err != nil {
-				log.Println(err)
+			if err := o.ocli.Send(CMDLOCALCLOSE, 0, aesEncode(enData(client, addr, []byte(err.Error())))); err != nil {
+				ll.Log2Error(err)
 			}
 
 			// 关闭本次通道
@@ -123,10 +129,9 @@ func (o *Client) onData(cmd, ext uint16, data []byte) {
 
 // Reconnect 重新连接服务器
 func (o *Client) Reconnect() error {
-	log.Println("connect:", o.serverPort, o.proxyPort)
 	for {
 		if err := o.ocli.Connect(o.serverPort); err != nil {
-			log.Println(err)
+			ll.Log2Error(err)
 			time.Sleep(time.Second)
 			continue
 		}
@@ -135,6 +140,6 @@ func (o *Client) Reconnect() error {
 		o.ocli.Send(CMDTUNNEL, 0, aesEncode([]byte(o.proxyPort)))
 		break
 	}
-	log.Println("connect success:", o.serverPort, o.proxyPort)
+	ll.Log4Trace("connect success:", o.serverPort, o.proxyPort)
 	return nil
 }
