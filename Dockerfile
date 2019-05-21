@@ -1,3 +1,3 @@
 FROM scratch
-ADD server_linux /server
-ADD client_linux /client
+COPY server_linux /server
+COPY client_linux /client
