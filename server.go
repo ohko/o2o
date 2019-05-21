@@ -15,16 +15,16 @@ import (
 
 // Server 服务端
 type Server struct {
-	oserv      *omsg.Server
+	msg        *omsg.Server
 	serverPort string
-	srvs       sync.Map
-	brows      sync.Map
+	webs       sync.Map // web服务监听
+	brows      sync.Map // 浏览器连接
 }
 
 type tunnelInfo struct {
-	oserv *omsg.Server
-	addr  string   // tunnel请求端口
-	conn  net.Conn // client -> server
+	srv  *Server
+	addr string   // tunnel请求端口
+	conn net.Conn // client -> server
 }
 
 // 浏览器信息
@@ -47,13 +47,13 @@ func (o *Server) Start(key, serverPort string) error {
 		ll.Log4Trace("AES crypt disabled")
 	}
 
-	o.oserv = omsg.NewServer()
-	o.oserv.OnData = o.onData
-	o.oserv.OnNewClient = o.onNewClient
-	o.oserv.OnClientClose = o.onClientClose
+	o.msg = omsg.NewServer()
+	o.msg.OnData = o.onData
+	o.msg.OnNewClient = o.onNewClient
+	o.msg.OnClientClose = o.onClientClose
 	go func() {
 		ll.Log4Trace("server:", o.serverPort)
-		ll.Log4Trace(o.oserv.StartServer(o.serverPort))
+		ll.Log4Trace(o.msg.StartServer(o.serverPort))
 	}()
 
 	return nil
@@ -64,28 +64,28 @@ func (o *Server) onNewClient(conn net.Conn) {
 }
 func (o *Server) onClientClose(conn net.Conn) {
 	// 释放tunnel监听的端口
-	if web, ok := o.srvs.Load(conn); ok {
+	if web, ok := o.webs.Load(conn); ok {
 		ll.Log4Trace("close port:", web.(net.Listener).Addr().String())
 		web.(net.Listener).Close()
-		o.srvs.Delete(conn)
+		o.webs.Delete(conn)
 	}
 	ll.Log4Trace("client close:", conn.RemoteAddr())
 }
 func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte) {
-	data = aesEncode(data)
+	data = aesCrypt(data)
 	ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
 	switch cmd {
 	case CMDHEART:
 		ll.Log4Trace(string(data))
 	case CMDTUNNEL:
-		t := &tunnelInfo{oserv: o.oserv, addr: string(data), conn: conn}
+		t := &tunnelInfo{srv: o, addr: string(data), conn: conn}
 		if err := o.createListen(t); err != nil {
-			if err := o.oserv.Send(conn, CMDFAILED, 0, aesEncode([]byte(err.Error()))); err != nil {
+			if err := o.Send(conn, CMDFAILED, 0, []byte(err.Error())); err != nil {
 				ll.Log2Error(err)
 			}
 		} else {
-			if err := o.oserv.Send(conn, CMDSUCCESS, 0, aesEncode(data)); err != nil {
+			if err := o.Send(conn, CMDSUCCESS, 0, data); err != nil {
 				ll.Log2Error(err)
 			}
 		}
@@ -96,7 +96,7 @@ func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte) {
 			if _, err := browser.(*browserInfo).conn.Write(data); err != nil {
 				ll.Log0Debug("browser write err:", err)
 				// 通知浏览器关闭
-				if err := o.oserv.Send(conn, CMDCLOSE, 0, aesEncode([]byte(conn.RemoteAddr().String()+browser.(*browserInfo).tunnel.addr))); err != nil {
+				if err := o.Send(conn, CMDCLOSE, 0, []byte(conn.RemoteAddr().String()+browser.(*browserInfo).tunnel.addr)); err != nil {
 					ll.Log2Error(err)
 				}
 			}
@@ -109,6 +109,11 @@ func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte) {
 			browser.(*browserInfo).tunnel.conn.Close()
 		}
 	}
+}
+
+// Send 原始数据加密后发送
+func (o *Server) Send(conn net.Conn, cmd, ext uint16, originData []byte) error {
+	return o.msg.Send(conn, cmd, ext, aesCrypt(originData))
 }
 
 // 8080:192.168.1.238:50000 请求服务器开启8080端口代理192.168.1.238的5000端口
@@ -125,11 +130,11 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 	if err != nil {
 		return err
 	}
-	o.srvs.Store(tunnel.conn, web)
+	o.webs.Store(tunnel.conn, web)
 	ll.Log4Trace("listen:", ":"+port, tunnel.conn.RemoteAddr(), tunnel.addr)
 
 	go func() {
-		defer o.srvs.Delete(tunnel.conn)
+		defer o.webs.Delete(tunnel.conn)
 		defer tunnel.conn.Close()
 		defer web.Close()
 		defer ll.Log4Trace("closed:", ":"+port, tunnel.conn.RemoteAddr(), tunnel.addr)
@@ -148,7 +153,7 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 				io.Copy(brow, conn)
 				// 通知浏览器关闭
 				ll.Log0Debug("通知浏览器关闭")
-				if err := o.oserv.Send(tunnel.conn, CMDCLOSE, 0, aesEncode([]byte(conn.RemoteAddr().String()+tunnel.addr))); err != nil {
+				if err := o.Send(tunnel.conn, CMDCLOSE, 0, []byte(conn.RemoteAddr().String()+tunnel.addr)); err != nil {
 					ll.Log2Error(err)
 				}
 			}()
@@ -161,7 +166,7 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 
 func (o *browserInfo) Write(p []byte) (n int, err error) {
 	// 浏览器数据转发到client
-	if err := o.tunnel.oserv.Send(o.tunnel.conn, CMDDATA, 0, aesEncode(enData(o.conn.RemoteAddr().String(), o.tunnel.addr, p))); err != nil {
+	if err := o.tunnel.srv.Send(o.tunnel.conn, CMDDATA, 0, enData(o.conn.RemoteAddr().String(), o.tunnel.addr, p)); err != nil {
 		ll.Log2Error(err)
 		o.conn.Close()
 		// 发送错误，关闭连接

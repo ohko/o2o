@@ -106,15 +106,15 @@ func TestServerClient(t *testing.T) {
 	wg.Wait()
 }
 
-func TestAesEncode(t *testing.T) {
+func TestAesCrypt(t *testing.T) {
 	texts := [][]byte{
 		[]byte(strings.Repeat(".", 3)),
 		[]byte(strings.Repeat(".", 0x10)),
 	}
 
 	for _, v := range texts {
-		en := aesEncode(v)
-		de := aesEncode(en)
+		en := aesCrypt(v)
+		de := aesCrypt(en)
 
 		if bytes.Compare(v, de) != 0 {
 			t.Fail()

@@ -74,7 +74,7 @@ func deData(data []byte) (string, string, []byte) {
 	return string(data[2 : 2+len1]), string(data[2+len1+2 : 2+len1+2+len2]), data[2+len1+2+len2+4:]
 }
 
-func aesEncode(data []byte) []byte {
+func aesCrypt(data []byte) []byte {
 	if !aesEnable {
 		return data
 	}
