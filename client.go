@@ -18,8 +18,7 @@ import (
 type Client struct {
 	msg                   *omsg.Client
 	serverPort, proxyPort string
-	serves                sync.Map  // map[浏览器IP:Port + 本地服务IP:Port]本地服务连接
-	lastHeart             time.Time // 最后心跳包时间
+	serves                sync.Map // map[浏览器IP:Port + 本地服务IP:Port]本地服务连接
 }
 
 // Start 启动客户端
@@ -63,9 +62,6 @@ func (o *Client) OmsgData(cmd, ext uint16, data []byte) {
 	ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
 	switch cmd {
-	case CMDHEART:
-		o.lastHeart = time.Now()
-		ll.Log0Debug(string(data))
 	case CMDSUCCESS:
 		ll.Log4Trace("tunnel success:", o.serverPort, string(data))
 	case CMDFAILED:
@@ -107,24 +103,7 @@ func (o *Client) Reconnect() error {
 		break
 	}
 	ll.Log4Trace("connect success:", o.serverPort, o.proxyPort)
-	o.lastHeart = time.Now()
 
-	// 发送心跳包，防止连接已经失效。
-	go func() {
-		defer func() { recover() }()
-		for {
-			time.Sleep(time.Second * 5)
-			if err := o.Send(CMDHEART, 0, []byte("heart")); err != nil {
-				o.msg.Close()
-				break
-			}
-			// 检查长连接最后收到心跳包的时间，超过15秒就断开，等待重连。防止连接已经失效。
-			if time.Since(o.lastHeart) > time.Second*15 {
-				o.msg.Close()
-				break
-			}
-		}
-	}()
 	return nil
 }
 

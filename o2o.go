@@ -15,7 +15,6 @@ import (
 
 // ...
 const (
-	CMDHEART      = 0 // 心跳包
 	CMDTUNNEL     = 1 // 1.客户端请求TCP隧道服务
 	CMDSUCCESS    = 2 // 2.服务器监听成功
 	CMDFAILED     = 3 // 3.服务器监听失败

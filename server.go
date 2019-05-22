@@ -18,7 +18,6 @@ import (
 type Server struct {
 	msg        *omsg.Server
 	serverPort string
-	heart      sync.Map // 记录长连接最后心跳时间
 	webs       sync.Map // web服务监听
 	brows      sync.Map // 浏览器连接
 }
@@ -55,28 +54,6 @@ func (o *Server) Start(key, serverPort string) error {
 		ll.Log4Trace(o.msg.StartServer(o.serverPort))
 	}()
 
-	// 检查每个长连接最后收到心跳包的时间，超过15秒就断开web，等待重连。防止连接已经失效。
-	go func() {
-		for {
-			time.Sleep(time.Second * 5)
-			o.heart.Range(func(key, val interface{}) bool {
-				conn := key.(net.Conn)
-				last := val.(time.Time)
-				if err := o.Send(conn, CMDHEART, 0, nil); err != nil {
-					conn.Close()
-					o.OmsgClientClose(conn)
-					o.heart.Delete(key)
-				}
-				if time.Since(last) > time.Second*15 {
-					conn.Close()
-					o.OmsgClientClose(conn)
-					o.heart.Delete(key)
-				}
-				return true
-			})
-		}
-	}()
-
 	return nil
 }
 
@@ -105,9 +82,6 @@ func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 	ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
 	switch cmd {
-	case CMDHEART:
-		o.heart.Store(conn, time.Now())
-		ll.Log0Debug(string(data))
 	case CMDTUNNEL:
 		t := &tunnelInfo{srv: o, addr: string(data), conn: conn}
 		if err := o.createListen(t); err != nil {
@@ -154,6 +128,17 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 		return fmt.Errorf(`format error:` + tunnel.addr)
 	}
 	port := tmp[0]
+
+	// 关闭之前的此端口
+	o.webs.Range(func(key, val interface{}) bool {
+		if port == strings.Split(val.(net.Listener).Addr().String(), ":")[1] {
+			ll.Log1Warn("close before listener:", port)
+			val.(net.Listener).Close()
+			time.Sleep(time.Second)
+			return false
+		}
+		return true
+	})
 
 	// 监听服务端口
 	web, err := net.Listen("tcp", ":"+port)
