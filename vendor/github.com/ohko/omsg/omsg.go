@@ -7,6 +7,21 @@ import (
 	"net"
 )
 
+// ServerInterface 服务端接口
+type ServerInterface interface {
+	OmsgNewClient(conn net.Conn)                          // 新客户端回调
+	OmsgData(conn net.Conn, cmd, ext uint16, data []byte) // 数据回调
+	OmsgError(conn net.Conn, err error)                   // 错误回调
+	OmsgClientClose(conn net.Conn)                        // 客户端断开回调
+}
+
+// ClientInterface 客户端接口
+type ClientInterface interface {
+	OmsgData(cmd, ext uint16, data []byte) // 收到命令行回调
+	OmsgError(err error)                   // 错误回调
+	OmsgClose()                            // 连接断开回调
+}
+
 type head struct {
 	Sign uint16 // 2数据标志 HK
 	CRC  uint16 // 2简单crc校验值
@@ -18,7 +33,8 @@ type head struct {
 const signWord = 0x4B48            // 标志HK
 var headSize = binary.Size(head{}) // 头尺寸
 
-func send(conn net.Conn, cmd, ext uint16, data []byte) error {
+// Send ...
+func Send(conn net.Conn, cmd, ext uint16, data []byte) error {
 	buffer := make([]byte, headSize+len(data))
 	// defer func() { log.Println("send:\n" + hex.Dump(buffer)) }()
 
@@ -48,7 +64,8 @@ func send(conn net.Conn, cmd, ext uint16, data []byte) error {
 	return nil
 }
 
-func recv(conn net.Conn) (uint16, uint16, []byte, error) {
+// Recv ...
+func Recv(conn net.Conn) (uint16, uint16, []byte, error) {
 
 	header := make([]byte, headSize)
 	if _, err := io.ReadFull(conn, header); err != nil {

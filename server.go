@@ -49,10 +49,7 @@ func (o *Server) Start(key, serverPort string) error {
 		ll.Log4Trace("AES crypt disabled")
 	}
 
-	o.msg = omsg.NewServer()
-	o.msg.OnData = o.onData
-	o.msg.OnNewClient = o.onNewClient
-	o.msg.OnClientClose = o.onClientClose
+	o.msg = omsg.NewServer(o)
 	go func() {
 		ll.Log4Trace("server:", o.serverPort)
 		ll.Log4Trace(o.msg.StartServer(o.serverPort))
@@ -67,12 +64,12 @@ func (o *Server) Start(key, serverPort string) error {
 				last := val.(time.Time)
 				if err := o.Send(conn, CMDHEART, 0, nil); err != nil {
 					conn.Close()
-					o.onClientClose(conn)
+					o.OmsgClientClose(conn)
 					o.heart.Delete(key)
 				}
 				if time.Since(last) > time.Second*15 {
 					conn.Close()
-					o.onClientClose(conn)
+					o.OmsgClientClose(conn)
 					o.heart.Delete(key)
 				}
 				return true
@@ -83,10 +80,16 @@ func (o *Server) Start(key, serverPort string) error {
 	return nil
 }
 
-func (o *Server) onNewClient(conn net.Conn) {
+// OmsgError ...
+func (o *Server) OmsgError(conn net.Conn, err error) { ll.Log0Debug(err) }
+
+// OmsgNewClient ...
+func (o *Server) OmsgNewClient(conn net.Conn) {
 	ll.Log4Trace("client connect:", conn.RemoteAddr())
 }
-func (o *Server) onClientClose(conn net.Conn) {
+
+// OmsgClientClose ...
+func (o *Server) OmsgClientClose(conn net.Conn) {
 	// 释放tunnel监听的端口
 	if web, ok := o.webs.Load(conn); ok {
 		ll.Log4Trace("close port:", web.(net.Listener).Addr().String())
@@ -95,7 +98,9 @@ func (o *Server) onClientClose(conn net.Conn) {
 	}
 	ll.Log4Trace("client close:", conn.RemoteAddr())
 }
-func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte) {
+
+// OmsgData ...
+func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 	data = aesCrypt(data)
 	ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
@@ -138,7 +143,7 @@ func (o *Server) onData(conn net.Conn, cmd, ext uint16, data []byte) {
 
 // Send 原始数据加密后发送
 func (o *Server) Send(conn net.Conn, cmd, ext uint16, originData []byte) error {
-	return o.msg.Send(conn, cmd, ext, aesCrypt(originData))
+	return omsg.Send(conn, cmd, ext, aesCrypt(originData))
 }
 
 // 8080:192.168.1.238:50000 请求服务器开启8080端口代理192.168.1.238的5000端口

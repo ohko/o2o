@@ -36,13 +36,15 @@ func (o *Client) Start(key, serverPort, proxyPort string) error {
 		ll.Log4Trace("AES crypt disabled")
 	}
 
-	o.msg = omsg.NewClient()
-	o.msg.OnData = o.onData
-	o.msg.OnClose = o.onClose
+	o.msg = omsg.NewClient(o)
 	return o.Reconnect()
 }
 
-func (o *Client) onClose() {
+// OmsgError ...
+func (o *Client) OmsgError(err error) { ll.Log0Debug(err) }
+
+// OmsgClose ...
+func (o *Client) OmsgClose() {
 	ll.Log4Trace("connect closed:", o.serverPort, o.proxyPort)
 
 	// 清理本地数据
@@ -55,7 +57,8 @@ func (o *Client) onClose() {
 	o.Reconnect()
 }
 
-func (o *Client) onData(cmd, ext uint16, data []byte) {
+// OmsgData ...
+func (o *Client) OmsgData(cmd, ext uint16, data []byte) {
 	data = aesCrypt(data)
 	ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
@@ -87,7 +90,7 @@ func (o *Client) onData(cmd, ext uint16, data []byte) {
 
 // Send 原始数据加密后发送
 func (o *Client) Send(cmd, ext uint16, originData []byte) error {
-	return o.msg.Send(cmd, ext, aesCrypt(originData))
+	return omsg.Send(o.msg.Conn, cmd, ext, aesCrypt(originData))
 }
 
 // Reconnect 重新连接服务器

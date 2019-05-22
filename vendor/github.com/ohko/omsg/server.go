@@ -8,29 +8,26 @@ import (
 
 // Server 服务器
 type Server struct {
-	server        net.Listener                                      // 用于服务器
-	OnNewClient   func(conn net.Conn)                               // 新客户端回调
-	OnData        func(conn net.Conn, cmd, ext uint16, data []byte) // 数据回调
-	OnError       func(conn net.Conn, err error)                    // 错误回调
-	OnClientClose func(conn net.Conn)                               // 客户端断开回调
-	clientList    sync.Map                                          // 客户端列表
+	si         ServerInterface
+	Listener   net.Listener // 用于服务器
+	ClientList sync.Map     // 客户端列表
 }
 
 // NewServer 创建
-func NewServer() *Server {
-	return new(Server)
+func NewServer(si ServerInterface) *Server {
+	return &Server{si: si}
 }
 
 // StartServer 启动服务
 func (o *Server) StartServer(laddr string) error {
 	var err error
-	if o.server, err = net.Listen("tcp", laddr); err != nil {
+	if o.Listener, err = net.Listen("tcp", laddr); err != nil {
 		return err
 	}
 
 	// 监听端口
 	for {
-		conn, err := o.server.Accept()
+		conn, err := o.Listener.Accept()
 		if err != nil {
 			return err
 		}
@@ -43,53 +40,44 @@ func (o *Server) StartServer(laddr string) error {
 // 接收数据
 func (o *Server) hServer(conn net.Conn) {
 	// 记录客户端联入时间
-	o.clientList.Store(conn, time.Now())
+	o.ClientList.Store(conn, time.Now())
 
 	// 新客户端回调
-	if o.OnNewClient != nil {
-		o.OnNewClient(conn)
-	}
+	o.si.OmsgNewClient(conn)
 
 	// 断线
 	defer func() {
 		// 从客户端列表移除
-		o.clientList.Delete(conn)
+		o.ClientList.Delete(conn)
 		conn.Close()
 
 		// 回调
-		if o.OnClientClose != nil {
-			o.OnClientClose(conn)
-		}
+		o.si.OmsgClientClose(conn)
 	}()
 
 	for {
-		cmd, ext, bs, err := recv(conn)
+		cmd, ext, bs, err := Recv(conn)
 		if err != nil {
-			if o.OnError != nil {
-				o.OnError(conn, err)
-			}
+			o.si.OmsgError(conn, err)
 			break
 		}
-		if o.OnData != nil {
-			o.OnData(conn, cmd, ext, bs)
-		}
+		o.si.OmsgData(conn, cmd, ext, bs)
 	}
 }
 
 // SendToAll 向所有客户端发送数据
 func (o *Server) SendToAll(cmd, ext uint16, data []byte) {
-	o.clientList.Range(func(key, value interface{}) bool {
-		o.Send(key.(net.Conn), cmd, ext, data)
+	o.ClientList.Range(func(key, value interface{}) bool {
+		Send(key.(net.Conn), cmd, ext, data)
 		return true
 	})
 }
 
-// Send 向指定客户端发送数据
-func (o *Server) Send(conn net.Conn, cmd, ext uint16, data []byte) error {
-	return send(conn, cmd, ext, data)
-}
-
 // Close 关闭服务器
 func (o *Server) Close() {
-	o.server.Close()
+	o.Listener.Close()
+	o.ClientList.Range(func(key, value interface{}) bool {
+		key.(net.Conn).Close()
+		return true
+	})
 }
