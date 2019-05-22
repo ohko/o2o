@@ -131,7 +131,8 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 
 	// 关闭之前的此端口
 	o.webs.Range(func(key, val interface{}) bool {
-		if port == strings.Split(val.(net.Listener).Addr().String(), ":")[1] {
+		ss := strings.Split(val.(net.Listener).Addr().String(), ":")
+		if port == ss[len(ss)-1] {
 			ll.Log1Warn("close before listener:", port)
 			val.(net.Listener).Close()
 			time.Sleep(time.Second)
