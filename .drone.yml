@@ -8,6 +8,15 @@ steps:
   - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod vendor -o server_linux -ldflags "-s -w" ./server
   - CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod vendor -o client_linux -ldflags "-s -w" ./client
 
+- name: release
+  image: plugins/github-release
+  settings:
+    api_key:
+      from_secret: github_token
+    files:
+      - server_linux
+      - client_linux
+
 - name: docker
   image: plugins/docker
   settings:
