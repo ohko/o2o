@@ -16,6 +16,8 @@ steps:
     files:
       - server_linux
       - client_linux
+  when:
+    event: tag
 
 - name: docker
   image: plugins/docker
