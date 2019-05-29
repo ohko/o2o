@@ -12,11 +12,12 @@ steps:
   - CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -mod vendor -o dist/client_arm64 -ldflags "-s -w" ./client
   - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -mod vendor -o dist/server_darwin64 -ldflags "-s -w" ./server
   - CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -mod vendor -o dist/client_darwin64 -ldflags "-s -w" ./client
-  - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/server_win64.exe -ldflags "-s -w" ./server
-  - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o dist/client_win64.exe -ldflags "-s -w" ./client
-  - CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -o dist/server_win32.exe -ldflags "-s -w" ./server
-  - CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -o dist/client_win32.exe -ldflags "-s -w" ./client
-
+  - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -mod vendor -o dist/server_win64.exe -ldflags "-s -w" ./server
+  - CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -mod vendor -o dist/client_win64.exe -ldflags "-s -w" ./client
+  - CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -mod vendor -o dist/server_win32.exe -ldflags "-s -w" ./server
+  - CGO_ENABLED=0 GOOS=windows GOARCH=386 go build -mod vendor -o dist/client_win32.exe -ldflags "-s -w" ./client
+  when:
+    event: tag
 - name: release
   image: plugins/github-release
   settings:
@@ -25,44 +26,3 @@ steps:
     files: dist/*
   when:
     event: tag
-
-# - name: docker
-#   image: plugins/docker
-#   settings:
-#     repo: ohko/o2o
-#     username:
-#       from_secret: docker_username
-#     password:
-#       from_secret: docker_password
-
-# - name: ssh
-#   image: appleboy/drone-ssh
-#   environment:
-#     AES_KEY:
-#       from_secret: aes_key
-#   settings:
-#     host:
-#       - cdeyun.com
-#     username: root
-#     ssh_key:
-#       from_secret: ssh_key
-#     envs: [aes_key]
-#     script:
-#       - docker pull ohko/o2o
-#       - docker rm -fv o2o
-#       - docker run -d --restart=always --name o2o -p 2399:2399 -p 127.0.0.1:5001:5001 -v /usr/share/zoneinfo:/usr/share/zoneinfo:ro -e TZ=Asia/Shanghai ohko/o2o /server -s=:2399 -key=$AES_KEY
-#       - for i in `docker images |grep "<none>"|awk '{print $3}'`;do docker image rm $i;done
-#       - for i in `docker ps -a |grep "Removal In Progress"|awk '{print $1}'`;do docker rm -fv $i;done
-
-# docker pull ohko/o2o && docker rm -fv o2o; docker run --name=o2o -d --restart=always -v /usr/share/zoneinfo:/usr/share/zoneinfo:ro -e TZ=Asia/Shanghai ohko/o2o /client -s=cdeyun.com:2399 -key= -p 5001:192.168.1.241:5001
-
-# - name: finish
-#   image: golang:1.12
-#   when:
-#     status: [ success, failure ]
-#   commands:
-#   - if [ $DRONE_BUILD_STATUS = "success" ];then
-#   -   curl -X POST 'https://msg.cdeyun.com/weixin' -d "account=2&msgType=news&toUser=hk&title=✅${DRONE_REPO_NAME}&description=${DRONE_REPO}:${DRONE_COMMIT_BRANCH}#${DRONE_BUILD_NUMBER}&url=${DRONE_BUILD_LINK}"
-#   - else
-#   -   curl -X POST 'https://msg.cdeyun.com/weixin' -d "account=2&msgType=news&toUser=hk&title=❌${DRONE_REPO_NAME}&description=${DRONE_REPO}:${DRONE_COMMIT_BRANCH}#${DRONE_BUILD_NUMBER}&url=${DRONE_BUILD_LINK}"
-#   - fi
