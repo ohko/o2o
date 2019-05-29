@@ -26,3 +26,12 @@ steps:
     files: dist/*
   when:
     event: tag
+
+- name: docker
+  image: plugins/docker
+  settings:
+    repo: ohko/o2o
+    username:
+      from_secret: docker_username
+    password:
+      from_secret: docker_password

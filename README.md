@@ -1,4 +1,4 @@
-![Build Status](https://drone.cdeyun.com/api/badges/cdeyun.com/o2o/status.svg)
+[![Build Status](https://drone-github.cdeyun.com/api/badges/ohko/o2o/status.svg)](https://drone-github.cdeyun.com/ohko/o2o)
 [![github.com/ohko/o2o](https://goreportcard.com/badge/github.com/ohko/o2o)](https://goreportcard.com/report/github.com/ohko/o2o)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/5379c3c2746a42338a2bfaabe40a53d2)](https://www.codacy.com/app/ohko/o2o?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=ohko/o2o&amp;utm_campaign=Badge_Grade)
 [![](https://images.microbadger.com/badges/image/ohko/o2o.svg)](https://microbadger.com/images/ohko/o2o "Get your own image badge on microbadger.com")
@@ -6,6 +6,9 @@
 # TCP 隧道
 将局域网任意IP的端口映射到公网服务器指定端口，隧道数据支持AES加密。
 > 例如：将局域网`192.168.1.240:5000`映射到公网`x.x.x.x:2399`
+
+## Download
+下载预编译版本：[Release](https://github.com/ohko/o2o/releases)
 
 ## Build
 ```shell
