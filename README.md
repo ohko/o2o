@@ -1,4 +1,3 @@
-[![Build Status](https://drone-github.cdeyun.com/api/badges/ohko/o2o/status.svg)](https://drone-github.cdeyun.com/ohko/o2o)
 [![github.com/ohko/o2o](https://goreportcard.com/badge/github.com/ohko/o2o)](https://goreportcard.com/report/github.com/ohko/o2o)
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/5379c3c2746a42338a2bfaabe40a53d2)](https://www.codacy.com/app/ohko/o2o?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=ohko/o2o&amp;utm_campaign=Badge_Grade)
 [![](https://images.microbadger.com/badges/image/ohko/o2o.svg)](https://microbadger.com/images/ohko/o2o "Get your own image badge on microbadger.com")
