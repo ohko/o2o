@@ -109,7 +109,6 @@ func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 		client, _, data := deData(data)
 		ll.Log4Trace("client server error:", string(data))
 		if browser, ok := o.brows.Load(client); ok {
-			browser.(*browserInfo).conn.Close()
 			browser.(*browserInfo).tunnel.conn.Close()
 		}
 	}
@@ -165,14 +164,16 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 
 			brow := &browserInfo{conn: conn, tunnel: tunnel}
 			// 互相COPY数据
-			go func() {
+			go func(conn net.Conn) {
+				defer conn.Close()
+
 				io.Copy(brow, conn)
 				// 通知浏览器关闭
 				ll.Log0Debug("通知浏览器关闭")
 				if err := o.Send(tunnel.conn, CMDCLOSE, 0, []byte(conn.RemoteAddr().String()+tunnel.addr)); err != nil {
 					ll.Log2Error(err)
 				}
-			}()
+			}(conn)
 			o.brows.Store(conn.RemoteAddr().String(), brow)
 		}
 	}()
