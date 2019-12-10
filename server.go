@@ -3,7 +3,6 @@ package o2o
 import (
 	"crypto/md5"
 	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
@@ -58,7 +57,7 @@ func (o *Server) Start(key, serverPort string) error {
 }
 
 // OmsgError ...
-func (o *Server) OmsgError(conn net.Conn, err error) { ll.Log0Debug(err) }
+func (o *Server) OmsgError(conn net.Conn, err error) { ll.Log2Error(err) }
 
 // OmsgNewClient ...
 func (o *Server) OmsgNewClient(conn net.Conn) {
@@ -79,7 +78,7 @@ func (o *Server) OmsgClientClose(conn net.Conn) {
 // OmsgData ...
 func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 	data = aesCrypt(data)
-	ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
+	// ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
 	switch cmd {
 	case CMDTUNNEL:
@@ -119,14 +118,14 @@ func (o *Server) Send(conn net.Conn, cmd, ext uint16, originData []byte) error {
 	return omsg.Send(conn, cmd, ext, aesCrypt(originData))
 }
 
-// 8080:192.168.1.238:50000 请求服务器开启8080端口代理192.168.1.238的5000端口
+// 0.0.0.0:8080:192.168.1.238:50000 请求服务器开启8080端口代理192.168.1.238的5000端口
 func (o *Server) createListen(tunnel *tunnelInfo) error {
 	// 检查建立通道的参数
 	tmp := strings.Split(tunnel.addr, ":")
-	if len(tmp) != 3 {
+	if len(tmp) != 4 {
 		return fmt.Errorf(`format error:` + tunnel.addr)
 	}
-	port := tmp[0]
+	port := strings.Join(tmp[:2], ":")
 
 	// 关闭之前的此端口
 	o.webs.Range(func(key, val interface{}) bool {
@@ -141,18 +140,20 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 	})
 
 	// 监听服务端口
-	web, err := net.Listen("tcp", ":"+port)
+	web, err := net.Listen("tcp", port)
 	if err != nil {
 		return err
 	}
 	o.webs.Store(tunnel.conn, web)
-	ll.Log4Trace("listen:", ":"+port, tunnel.conn.RemoteAddr(), tunnel.addr)
+	ll.Log4Trace("listen:", port, tunnel.conn.RemoteAddr(), tunnel.addr)
 
 	go func() {
-		defer o.webs.Delete(tunnel.conn)
-		defer tunnel.conn.Close()
-		defer web.Close()
-		defer ll.Log4Trace("closed:", ":"+port, tunnel.conn.RemoteAddr(), tunnel.addr)
+		defer func() {
+			ll.Log4Trace("closed:", port, tunnel.conn.RemoteAddr(), tunnel.addr)
+			web.Close()
+			tunnel.conn.Close()
+			o.webs.Delete(tunnel.conn)
+		}()
 
 		// 接受browser连接
 		for {
@@ -165,14 +166,16 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 			brow := &browserInfo{conn: conn, tunnel: tunnel}
 			// 互相COPY数据
 			go func(conn net.Conn) {
-				defer conn.Close()
+				defer func() {
+					conn.Close()
+					// 通知浏览器关闭
+					ll.Log0Debug("browser close:", conn.RemoteAddr().String())
+					if err := o.Send(tunnel.conn, CMDCLOSE, 0, []byte(conn.RemoteAddr().String()+tunnel.addr)); err != nil {
+						ll.Log2Error(err)
+					}
+				}()
 
 				io.Copy(brow, conn)
-				// 通知浏览器关闭
-				ll.Log0Debug("通知浏览器关闭")
-				if err := o.Send(tunnel.conn, CMDCLOSE, 0, []byte(conn.RemoteAddr().String()+tunnel.addr)); err != nil {
-					ll.Log2Error(err)
-				}
 			}(conn)
 			o.brows.Store(conn.RemoteAddr().String(), brow)
 		}

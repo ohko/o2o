@@ -10,27 +10,37 @@ import (
 	"sync"
 	"testing"
 	"time"
+)
 
-	"github.com/ohko/logger"
+const testCount = 2
+
+var (
+	s = &Server{}
+	c = &Client{}
 )
 
 func serivces() {
 	serverPort := ":2399"
-	proxyPort := "2345:127.0.0.1:5000"
+	proxyPort := "0.0.0.0:2345:127.0.0.1:5000"
 	key := "12345678"
-	ll.SetLevel(logger.LoggerLevel2Warning)
 
 	// server
-	if err := (&Server{}).Start(key, serverPort); err != nil {
+	if err := s.Start(key, serverPort); err != nil {
 		log.Fatal(err)
 	}
 	time.Sleep(time.Second)
 
 	// client
-	if err := (&Client{}).Start(key, serverPort, proxyPort); err != nil {
+	if err := c.Start(key, serverPort, proxyPort); err != nil {
 		log.Fatal(err)
 	}
-	time.Sleep(time.Second)
+
+	go func() {
+		// client
+		if err := (&Client{}).Start(key, serverPort, proxyPort); err != nil {
+			log.Fatal(err)
+		}
+	}()
 
 	// local server
 	s, err := net.Listen("tcp", ":5000")
@@ -58,6 +68,8 @@ func serivces() {
 			conn.Close()
 		}
 	}(s)
+
+	time.Sleep(time.Second)
 }
 
 func reverse(data []byte) []byte {
@@ -69,6 +81,7 @@ func reverse(data []byte) []byte {
 	return msg
 }
 
+// go test o2o -run TestServerClient -v -count=1
 func TestServerClient(t *testing.T) {
 	serivces()
 
@@ -78,6 +91,7 @@ func TestServerClient(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		defer conn.Close()
 
 		if _, err := conn.Write(msg); err != nil {
 			t.Fatal(err)
@@ -97,13 +111,16 @@ func TestServerClient(t *testing.T) {
 		wg.Done()
 	}
 
-	count := 100
-	wg.Add(count)
-	for i := 0; i < count; i++ {
+	wg.Add(testCount)
+	for i := 0; i < testCount; i++ {
 		go fn([]byte(fmt.Sprintf("12345678%d", i)))
 	}
 
 	wg.Wait()
+
+	time.Sleep(time.Second * 2)
+	c.msg.Close()
+	time.Sleep(time.Second * 3)
 }
 
 func TestAesCrypt(t *testing.T) {

@@ -3,8 +3,6 @@ package o2o
 import (
 	"crypto/md5"
 	"crypto/sha256"
-	"encoding/hex"
-	"fmt"
 	"io"
 	"net"
 	"strings"
@@ -40,7 +38,7 @@ func (o *Client) Start(key, serverPort, proxyPort string) error {
 }
 
 // OmsgError ...
-func (o *Client) OmsgError(err error) { ll.Log0Debug(err) }
+func (o *Client) OmsgError(err error) { ll.Log2Error(err) }
 
 // OmsgClose ...
 func (o *Client) OmsgClose() {
@@ -59,7 +57,7 @@ func (o *Client) OmsgClose() {
 // OmsgData ...
 func (o *Client) OmsgData(cmd, ext uint16, data []byte) {
 	data = aesCrypt(data)
-	ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
+	// ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
 	switch cmd {
 	case CMDSUCCESS:
@@ -118,18 +116,19 @@ func (o *Client) dispose(client, addr string, data []byte) (err error) {
 
 	// 本地还没有与服务建立连接，创建一个新的服务连接
 	if serve == nil {
-		// addr[2345:192.168.1.240:5000]
+		// addr[0.0.0.0:2345:192.168.1.240:5000]
 		tmp := strings.Split(addr, ":")
-		serve, err = net.Dial("tcp", strings.Join(tmp[1:], ":"))
+		serve, err = net.Dial("tcp", strings.Join(tmp[2:], ":"))
 		if err != nil {
 			return err
 		}
+		ll.Log0Debug("create local connect:", serve.LocalAddr())
 		o.serves.Store(client+addr, serve)
 
 		go func() {
 			// 转发服务的数据
 			io.Copy(&pipeClient{serve: serve, cli: o, client: client, addr: addr}, serve)
-			ll.Log0Debug("local close:", serve.RemoteAddr())
+			ll.Log0Debug("local close:", serve.LocalAddr())
 			o.serves.Delete(client + addr)
 		}()
 	}

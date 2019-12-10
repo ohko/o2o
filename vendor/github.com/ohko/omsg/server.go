@@ -33,8 +33,6 @@ func (o *Server) StartServer(laddr string) error {
 		}
 		go o.hServer(conn)
 	}
-
-	return nil
 }
 
 // 接收数据

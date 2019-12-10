@@ -4,10 +4,8 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"encoding/binary"
-	"log"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 
 	"github.com/ohko/logger"
@@ -28,16 +26,8 @@ var (
 	aesEnable bool
 	aesKey    [32]byte
 	aesIV     [16]byte
-	ll        = logger.NewLogger()
+	ll        = logger.NewLogger(nil)
 )
-
-func init() {
-	ll.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-	ll.SetLevel(logger.LoggerLevel2Warning)
-	if runtime.GOOS != "darwin" {
-		ll.SetLevel(logger.LoggerLevel2Warning)
-	}
-}
 
 // WaitCtrlC 捕捉Ctrl+C
 func WaitCtrlC() {

@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	proxyPort  = flag.String("p", "2345:192.168.1.240:5000", "请求创建隧道：internetPort:intranet:port")
+	proxyPort  = flag.String("p", "0.0.0.0:2345:192.168.1.240:5000", "请求创建隧道：internetPort:intranet:port")
 	serverPort = flag.String("s", ":2399", "外网服务器")
 	key        = flag.String("key", "20190303", "密钥，留空不启用AES加密")
 )
