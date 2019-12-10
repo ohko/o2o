@@ -50,7 +50,7 @@ func (o *Client) OmsgClose() {
 
 	// 清理本地数据
 	o.serves.Range(func(key, val interface{}) bool {
-		key.(net.Conn).Close()
+		val.(net.Conn).Close()
 		o.serves.Delete(key)
 		return true
 	})
