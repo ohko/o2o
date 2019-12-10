@@ -14,3 +14,5 @@ LABEL maintainer="ohko <ohko@qq.com>"
 COPY --from=builder /go/src/server_linux /
 COPY --from=builder /go/src/client_linux /
 WORKDIR /
+ENV TZ Asia/Shanghai
+ENV LOG_LEVEL 1
