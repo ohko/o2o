@@ -13,13 +13,13 @@ import (
 
 // ...
 const (
-	CMDTUNNEL     = 1 // 1.客户端请求TCP隧道服务
-	CMDSUCCESS    = 2 // 2.服务器监听成功
-	CMDFAILED     = 3 // 3.服务器监听失败
-	CMDDATA       = 4 // 4.数据流
-	CMDCLOSE      = 5 // 5.浏览器关闭连接
-	CMDLOCALCLOSE = 6 // 6.本地服务关闭或连接失败
-	bufferSize    = 1024 * 1024
+	cmdTunnel        = 1 // 1.客户端请求TCP隧道服务
+	cmdTunnelSuccess = 2 // 2.服务器监听成功
+	cmdTunnelFailed  = 3 // 3.服务器监听失败
+	cmdData          = 4 // 4.数据流
+	cmdBrowserClose  = 5 // 5.浏览器关闭连接
+	cmdLocaSrveClose = 6 // 6.本地服务关闭或连接失败
+	bufferSize       = 1024 * 1024
 )
 
 var (
@@ -36,27 +36,27 @@ func WaitCtrlC() {
 	<-c
 }
 
-func enData(client, addr string, data []byte) []byte {
-	sum := 2 + len(client) + 2 + len(addr) + 4 + len(data)
+func enData(browserAddr, serveAddr string, browserData []byte) []byte {
+	sum := 2 + len(browserAddr) + 2 + len(serveAddr) + 4 + len(browserData)
 	dataBuf := make([]byte, sum)
 	// defer func() { log.Println("send:\n" + hex.Dump(dataBuf)) }()
 
-	len1 := len(client)
+	len1 := len(browserAddr)
 	binary.LittleEndian.PutUint16(dataBuf[0:2], uint16(len1))
-	copy(dataBuf[2:2+len1], []byte(client))
+	copy(dataBuf[2:2+len1], []byte(browserAddr))
 
-	len2 := len(addr)
+	len2 := len(serveAddr)
 	binary.LittleEndian.PutUint16(dataBuf[2+len1:], uint16(len2))
-	copy(dataBuf[2+len1+2:], []byte(addr))
+	copy(dataBuf[2+len1+2:], []byte(serveAddr))
 
-	len3 := len(data)
+	len3 := len(browserData)
 	binary.LittleEndian.PutUint16(dataBuf[2+len1+2+len2:], uint16(len3))
-	copy(dataBuf[2+len1+2+len2+4:], data)
+	copy(dataBuf[2+len1+2+len2+4:], browserData)
 
 	return dataBuf
 }
 
-func deData(data []byte) (string, string, []byte) {
+func deData(data []byte) (browserAddr string, serveAddr string, browserData []byte) {
 	// log.Println("recv:\n" + hex.Dump(data))
 	len1 := binary.LittleEndian.Uint16(data[0:2])
 	len2 := binary.LittleEndian.Uint16(data[2+len1:])

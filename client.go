@@ -38,7 +38,11 @@ func (o *Client) Start(key, serverPort, proxyPort string) error {
 }
 
 // OmsgError ...
-func (o *Client) OmsgError(err error) { ll.Log2Error(err) }
+func (o *Client) OmsgError(err error) {
+	if err != io.EOF {
+		ll.Log2Error(err)
+	}
+}
 
 // OmsgClose ...
 func (o *Client) OmsgClose() {
@@ -46,6 +50,7 @@ func (o *Client) OmsgClose() {
 
 	// 清理本地数据
 	o.serves.Range(func(key, val interface{}) bool {
+		key.(net.Conn).Close()
 		o.serves.Delete(key)
 		return true
 	})
@@ -60,25 +65,18 @@ func (o *Client) OmsgData(cmd, ext uint16, data []byte) {
 	// ll.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
 	switch cmd {
-	case CMDSUCCESS:
+	case cmdTunnelSuccess: // 通道创建成功
 		ll.Log4Trace("tunnel success:", o.serverPort, string(data))
-	case CMDFAILED:
+	case cmdTunnelFailed: // 通道创建失败，断开连接
 		ll.Log2Error("tunnel failed:", o.serverPort, string(data))
-		time.Sleep(time.Second * 5)
-		o.Send(CMDTUNNEL, 0, []byte(o.proxyPort))
-	case CMDCLOSE:
-		if conn, ok := o.serves.Load(string(data)); ok {
-			ll.Log0Debug("关闭本地连接:", string(data))
-			conn.(net.Conn).Close()
+		o.msg.Close()
+	case cmdBrowserClose: // 远端浏览器关闭
+		if serve, ok := o.serves.Load(string(data)); ok {
+			ll.Log0Debug("close local connect:", string(data))
+			serve.(net.Conn).Close()
 		}
-	case CMDDATA:
-		client, addr, browserData := deData(data)
-		if err := o.dispose(client, addr, browserData); err != nil {
-			// 通知本地服务错误
-			if err = o.Send(CMDLOCALCLOSE, 0, enData(client, addr, []byte(err.Error()))); err != nil {
-				ll.Log2Error(err)
-			}
-		}
+	case cmdData: // 远端浏览器数据流
+		o.browserDataStream(deData(data))
 	}
 }
 
@@ -97,7 +95,7 @@ func (o *Client) Reconnect() error {
 		}
 
 		// 连接成功，发送Tunnel请求
-		o.Send(CMDTUNNEL, 0, []byte(o.proxyPort))
+		o.Send(cmdTunnel, 0, []byte(o.proxyPort))
 		break
 	}
 	ll.Log4Trace("connect success:", o.serverPort, o.proxyPort)
@@ -105,55 +103,71 @@ func (o *Client) Reconnect() error {
 	return nil
 }
 
-// 处理数据
-func (o *Client) dispose(client, addr string, data []byte) (err error) {
-	var serve net.Conn
+// 处理浏览器数据流
+func (o *Client) browserDataStream(browserAddr, serveAddr string, browserData []byte) {
+	var (
+		err   error
+		serve net.Conn
+	)
+
+	defer func() {
+		if err != nil {
+			// 通知本地服务错误
+			if err := o.Send(cmdLocaSrveClose, 0, enData(browserAddr, serveAddr, []byte(err.Error()))); err != nil {
+				ll.Log2Error(err)
+			}
+		}
+	}()
 
 	// 此浏览器的请求是否已有本地服务连接
-	if _conn, ok := o.serves.Load(client + addr); ok {
+	if _conn, ok := o.serves.Load(browserAddr + serveAddr); ok {
 		serve = _conn.(net.Conn)
 	}
 
 	// 本地还没有与服务建立连接，创建一个新的服务连接
 	if serve == nil {
 		// addr[0.0.0.0:2345:192.168.1.240:5000]
-		tmp := strings.Split(addr, ":")
+		tmp := strings.Split(serveAddr, ":")
 		serve, err = net.Dial("tcp", strings.Join(tmp[2:], ":"))
 		if err != nil {
-			return err
+			return
 		}
 		ll.Log0Debug("create local connect:", serve.LocalAddr())
-		o.serves.Store(client+addr, serve)
+		o.serves.Store(browserAddr+serveAddr, serve)
 
 		go func() {
+			defer serve.Close()
 			// 转发服务的数据
-			io.Copy(&pipeClient{serve: serve, cli: o, client: client, addr: addr}, serve)
-			ll.Log0Debug("local close:", serve.LocalAddr())
-			o.serves.Delete(client + addr)
+			io.Copy(&pipeClient{
+				serve:       serve,
+				cli:         o,
+				browserAddr: browserAddr,
+				serveAddr:   serveAddr,
+			}, serve)
+			ll.Log0Debug("local end:", serve.LocalAddr())
+			o.serves.Delete(browserAddr + serveAddr)
 		}()
 	}
 
 	// 数据转发到本地服务
-	if _, err := serve.Write(data); err != nil {
-		// 关闭本次通道
+	if _, err := serve.Write(browserData); err != nil {
+		// 发送失败，关闭本次通道
 		serve.Close()
-		return err
+		return
 	}
-
-	return nil
 }
 
 // 数据通道
 type pipeClient struct {
-	serve        net.Conn
-	cli          *Client
-	client, addr string
+	cli                    *Client
+	serve                  net.Conn
+	browserAddr, serveAddr string
 }
 
 func (o *pipeClient) Write(p []byte) (n int, err error) {
 	// 数据转发到远端
-	if err := o.cli.Send(CMDDATA, 0, enData(o.client, o.addr, p)); err != nil {
-		// 关闭本次通道
+	if err := o.cli.Send(cmdData, 0, enData(o.browserAddr, o.serveAddr, p)); err != nil {
+		// 发送失败，关闭本次通道
 		o.serve.Close()
 		return 0, err
 	}

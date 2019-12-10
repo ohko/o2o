@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-const testCount = 2
+const testCount = 1
 
 var (
 	s = &Server{}
@@ -35,12 +35,12 @@ func serivces() {
 		log.Fatal(err)
 	}
 
-	go func() {
-		// client
-		if err := (&Client{}).Start(key, serverPort, proxyPort); err != nil {
-			log.Fatal(err)
-		}
-	}()
+	// go func() {
+	// 	// client
+	// 	if err := (&Client{}).Start(key, serverPort, proxyPort); err != nil {
+	// 		log.Fatal(err)
+	// 	}
+	// }()
 
 	// local server
 	s, err := net.Listen("tcp", ":5000")
