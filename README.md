@@ -22,7 +22,7 @@ go build -mod=vendor -o client ./client
 ```shell
 # 连接服务器2399端口，传送指令
 # 请求服务器开启2390端口，用于代理192.168.1.240的5000端口
-./client -s x.x.x.x:2399 -key=mykey -p 2390:192.168.1.240:5000
+./client -s x.x.x.x:2399 -key=mykey -p 0.0.0.0:2390:192.168.1.240:5000
 ```
 
 ## Docker
@@ -31,7 +31,7 @@ go build -mod=vendor -o client ./client
 docker run --name=o2o -d --restart=always -p 2390-2399:2390-2399 ohko/o2o /server_linux -s :2399 -key=mykey
 
 # Client 请求2390端口代理192.168.1.240的5000端口
-docker run --name=o2o -d --restart=always ohko/o2o /client_linux -s x.x.x.x:2399 -p 2390:192.168.1.240:5000 -key=mykey
+docker run --name=o2o -d --restart=always ohko/o2o /client_linux -s x.x.x.x:2399 -p 0.0.0.0:2390:192.168.1.240:5000 -key=mykey
 
 # 测试访问
 curl http://x.x.x.x:2345

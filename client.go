@@ -113,6 +113,7 @@ func (o *Client) browserDataStream(browserAddr, serveAddr string, browserData []
 	defer func() {
 		if err != nil {
 			// 通知本地服务错误
+			ll.Log0Debug("local serve error:", err)
 			if err := o.Send(cmdLocaSrveClose, 0, enData(browserAddr, serveAddr, []byte(err.Error()))); err != nil {
 				ll.Log2Error(err)
 			}
@@ -128,7 +129,7 @@ func (o *Client) browserDataStream(browserAddr, serveAddr string, browserData []
 	if serve == nil {
 		// addr[0.0.0.0:2345:192.168.1.240:5000]
 		tmp := strings.Split(serveAddr, ":")
-		serve, err = net.Dial("tcp", strings.Join(tmp[2:], ":"))
+		serve, err = net.DialTimeout("tcp", strings.Join(tmp[2:], ":"), time.Second*3)
 		if err != nil {
 			return
 		}

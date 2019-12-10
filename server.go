@@ -31,6 +31,7 @@ type tunnelInfo struct {
 type browserInfo struct {
 	browserConn net.Conn // 浏览器连接
 	tunnel      *tunnelInfo
+	data        chan []byte
 }
 
 // Start 启动服务
@@ -99,20 +100,14 @@ func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 	case cmdData:
 		client, _, data := deData(data)
 		if browser, ok := o.brows.Load(client); ok {
-			// ll.Log0Debug("向浏览器发送：\n" + hex.Dump(data))
-			if _, err := browser.(*browserInfo).browserConn.Write(data); err != nil {
-				ll.Log0Debug("browser write err:", err)
-				// 通知浏览器关闭
-				if err := o.Send(conn, cmdBrowserClose, 0, []byte(conn.RemoteAddr().String()+browser.(*browserInfo).tunnel.tunnelAddr)); err != nil {
-					ll.Log2Error(err)
-				}
-			}
+			browser.(*browserInfo).data <- data
 		}
 	case cmdLocaSrveClose:
 		client, _, data := deData(data)
 		ll.Log4Trace("client server error:", string(data))
 		if browser, ok := o.brows.Load(client); ok {
-			browser.(*browserInfo).tunnel.clientConn.Close()
+			ll.Log4Trace("close browser:", client)
+			browser.(*browserInfo).browserConn.Close()
 		}
 	}
 }
@@ -167,27 +162,31 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 			}
 			ll.Log0Debug("new brows:", browserConn.RemoteAddr())
 
-			brow := &browserInfo{browserConn: browserConn, tunnel: tunnel}
-			// 互相COPY数据
-			go func(browserConn net.Conn) {
-				defer func() {
-					browserConn.Close()
-					// 通知浏览器关闭
-					ll.Log0Debug("browser close:", browserConn.RemoteAddr().String())
-					if err := o.Send(tunnel.clientConn, cmdBrowserClose, 0, []byte(browserConn.RemoteAddr().String()+tunnel.tunnelAddr)); err != nil {
-						ll.Log2Error(err)
-					}
-				}()
-
-				io.Copy(brow, browserConn)
-				ll.Log0Debug("browser end:", browserConn.RemoteAddr().String())
-				o.brows.Delete(browserConn.RemoteAddr().String())
-			}(browserConn)
-			o.brows.Store(browserConn.RemoteAddr().String(), brow)
+			go o.newBrowser(&browserInfo{browserConn: browserConn, tunnel: tunnel, data: make(chan []byte)})
 		}
 	}()
 
 	return nil
+}
+
+func (o *Server) newBrowser(brow *browserInfo) {
+	o.brows.Store(brow.browserConn.RemoteAddr().String(), brow)
+
+	// 互相COPY数据
+	defer func() {
+		close(brow.data)
+		brow.browserConn.Close()
+		o.brows.Delete(brow.browserConn.RemoteAddr().String())
+		// 通知浏览器关闭
+		ll.Log0Debug("browser close:", brow.browserConn.RemoteAddr().String())
+		if err := o.Send(brow.tunnel.clientConn, cmdBrowserClose, 0, []byte(brow.browserConn.RemoteAddr().String()+brow.tunnel.tunnelAddr)); err != nil {
+			ll.Log2Error(err)
+		}
+	}()
+
+	go io.Copy(brow.browserConn, brow)
+	io.Copy(brow, brow.browserConn)
+	ll.Log0Debug("browser end:", brow.browserConn.RemoteAddr().String())
 }
 
 func (o *browserInfo) Write(p []byte) (n int, err error) {
@@ -199,4 +198,18 @@ func (o *browserInfo) Write(p []byte) (n int, err error) {
 		return 0, err
 	}
 	return len(p), nil
+}
+
+func (o *browserInfo) Read(p []byte) (n int, err error) {
+	// client数据转发到浏览器
+	data, ok := <-o.data
+	if !ok {
+		return 0, io.EOF
+	}
+	if len(p) >= len(data) {
+		copy(p, data)
+	} else {
+		p = data
+	}
+	return len(data), nil
 }
