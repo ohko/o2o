@@ -124,13 +124,14 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 	if len(tmp) != 4 {
 		return fmt.Errorf(`format error:` + tunnel.tunnelAddr)
 	}
-	port := strings.Join(tmp[:2], ":")
+	address := strings.Join(tmp[:2], ":")
+	port := tmp[1]
 
 	// 关闭之前的此端口
 	o.webs.Range(func(key, val interface{}) bool {
 		ss := strings.Split(val.(net.Listener).Addr().String(), ":")
 		if port == ss[len(ss)-1] {
-			ll.Log1Warn("close before listener:", port)
+			ll.Log1Warn("close before listener:", address)
 			val.(net.Listener).Close()
 			time.Sleep(time.Second)
 			return false
@@ -139,16 +140,16 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 	})
 
 	// 监听服务端口
-	web, err := net.Listen("tcp", port)
+	web, err := net.Listen("tcp", address)
 	if err != nil {
 		return err
 	}
 	o.webs.Store(tunnel.clientConn, web)
-	ll.Log4Trace("tunnel:", port, tunnel.clientConn.RemoteAddr(), tunnel.tunnelAddr)
+	ll.Log4Trace("tunnel:", address, tunnel.clientConn.RemoteAddr(), tunnel.tunnelAddr)
 
 	go func() {
 		defer func() {
-			ll.Log4Trace("closed:", port, tunnel.clientConn.RemoteAddr(), tunnel.tunnelAddr)
+			ll.Log4Trace("closed:", address, tunnel.clientConn.RemoteAddr(), tunnel.tunnelAddr)
 			web.Close()
 			tunnel.clientConn.Close()
 			o.webs.Delete(tunnel.clientConn)
