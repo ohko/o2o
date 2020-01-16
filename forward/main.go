@@ -1,0 +1,46 @@
+package main
+
+import (
+	"flag"
+	"io"
+	"log"
+	"net"
+)
+
+var (
+	serverPort = flag.String("p", ":8080", "监听端口")
+	proxyAddr  = flag.String("f", "ip.lyl.hk:80", "代理地址")
+)
+
+func main() {
+	flag.Parse()
+
+	log.Println("Server:", *serverPort)
+	log.Println("Forward:", *proxyAddr)
+	l, err := net.Listen("tcp", *serverPort)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		go proxy(conn)
+	}
+}
+
+func proxy(conn net.Conn) {
+	defer conn.Close()
+
+	local, err := net.Dial("tcp", *proxyAddr)
+	if err != nil {
+		return
+	}
+
+	go io.Copy(conn, local)
+	io.Copy(local, conn)
+	local.Close()
+}

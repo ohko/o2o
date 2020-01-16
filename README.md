@@ -10,6 +10,7 @@
 ```shell
 go build -mod=vendor -o server ./server
 go build -mod=vendor -o client ./client
+go build -mod=vendor -o forward ./forward
 ```
 
 ## Server
@@ -25,6 +26,12 @@ go build -mod=vendor -o client ./client
 ./client -s x.x.x.x:2399 -key=mykey -p 0.0.0.0:2390:192.168.1.240:5000
 ```
 
+## 指定服务转发
+```shell
+# 监听8080端口，将请求转发至ip.lyl.hk:80
+./forward -p x.x.x.x:8080 -f ip.lyl.hk:80
+```
+
 ## Docker
 ```shell
 # Server 开启2390-2399端口段
@@ -33,6 +40,10 @@ docker run --name=o2o -d --restart=always -p 2390-2399:2390-2399 ohko/o2o /serve
 # Client 请求2390端口代理192.168.1.240的5000端口
 docker run --name=o2o -d --restart=always ohko/o2o /client_linux -s x.x.x.x:2399 -p 0.0.0.0:2390:192.168.1.240:5000 -key=mykey
 
+# Forward 监听8080端口，将请求转发至ip.lyl.hk:80
+docker run --name=o2o -d --restart=always -p 8080:8080 ohko/o2o /forward_linux -p :8080 -f ip.lyl.hk:80
+
 # 测试访问
 curl http://x.x.x.x:2345
+curl http://x.x.x.x:8080
 ```
