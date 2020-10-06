@@ -1,7 +1,5 @@
-FROM golang:1.12-stretch AS builder
-ENV GO111MODULE on
+FROM golang:1.15-buster AS builder
 ENV CGO_ENABLED 0
-ENV GOFLAGS -mod=vendor
 COPY . /go/src
 WORKDIR /go/src
 RUN go build -v -o server_linux -ldflags "-s -w" ./server

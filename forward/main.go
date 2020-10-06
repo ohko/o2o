@@ -42,22 +42,8 @@ func proxy(conn net.Conn) {
 	if err != nil {
 		return
 	}
+	defer local.Close()
 
-	ch := make(chan int, 1)
-	go func() {
-		io.Copy(local, conn)
-		select {
-		case ch <- 1:
-		default:
-		}
-	}()
-	go func() {
-		io.Copy(conn, local)
-		select {
-		case ch <- 1:
-		default:
-		}
-	}()
-	<-ch
-	local.Close()
+	go io.Copy(conn, local)
+	io.Copy(local, conn)
 }
