@@ -17,8 +17,8 @@ const (
 	cmdTunnelSuccess = 2 // 2.服务器监听成功
 	cmdTunnelFailed  = 3 // 3.服务器监听失败
 	cmdData          = 4 // 4.数据流
-	cmdBrowserClose  = 5 // 5.浏览器关闭连接
-	cmdLocaSrveClose = 6 // 6.本地服务关闭或连接失败
+	cmdUserClose     = 5 // 5.User关闭连接
+	cmdLocaSrveClose = 6 // 6.LocalServer关闭或连接失败
 	bufferSize       = 1024 * 1024
 )
 
@@ -26,7 +26,8 @@ var (
 	aesEnable bool
 	aesKey    [32]byte
 	aesIV     [16]byte
-	ll        = logger.NewLogger(nil)
+	lServer   = logger.NewLogger(nil)
+	lClient   = logger.NewLogger(nil)
 )
 
 // WaitCtrlC 捕捉Ctrl+C

@@ -4,6 +4,7 @@ import (
 	"flag"
 	"log"
 	"o2o"
+	"runtime"
 )
 
 var (
@@ -13,6 +14,8 @@ var (
 
 func main() {
 	flag.Parse()
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	log.SetFlags(log.Flags() | log.Lshortfile)
 
 	o := &o2o.Server{}
 	if err := o.Start(*key, *serverPort); err != nil {

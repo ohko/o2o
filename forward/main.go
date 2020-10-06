@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"runtime"
 )
 
 var (
@@ -14,6 +15,8 @@ var (
 
 func main() {
 	flag.Parse()
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	log.SetFlags(log.Flags() | log.Lshortfile)
 
 	log.Println("Server:", *serverPort)
 	log.Println("Forward:", *proxyAddr)

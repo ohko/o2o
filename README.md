@@ -6,6 +6,10 @@
 将局域网任意IP的端口映射到公网服务器指定端口，隧道数据支持AES加密。
 > 例如：将局域网`192.168.1.240:5000`映射到公网`x.x.x.x:2399`
 
+```
+User <-> Server <-> Client <-> LocalServer
+```
+
 ## Build
 ```shell
 go build -mod=vendor -o server ./server
