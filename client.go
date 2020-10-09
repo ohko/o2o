@@ -162,6 +162,11 @@ func (o *Client) browserDataStream(browserAddr, serveAddr string, browserData []
 				}
 			}
 
+			// 通知本地服务错误
+			if err := o.Send(cmdLocaSrveClose, 0, enData(browserAddr, serveAddr, []byte("local server close"))); err != nil {
+				lClient.Log2Error(err)
+			}
+
 			lClient.Log0Debug("local end:", local.LocalAddr())
 			o.localServers.Delete(browserAddr + serveAddr)
 			atomic.AddInt64(&o.localServersCount, -1)

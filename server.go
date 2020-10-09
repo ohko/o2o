@@ -108,9 +108,9 @@ func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 		}
 	case cmdLocaSrveClose:
 		client, _, data := deData(data)
-		lServer.Log4Trace("client server error:", string(data))
+		lServer.Log0Debug("client server error:", string(data))
 		if user, ok := o.users.Load(client); ok {
-			lServer.Log4Trace("close user:", client)
+			lServer.Log0Debug("close user:", client)
 			user.(*userInfo).userConn.Close()
 		}
 	}
