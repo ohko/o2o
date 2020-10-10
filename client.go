@@ -23,7 +23,7 @@ type Client struct {
 }
 
 // Start 启动客户端
-func (o *Client) Start(key, serverPort, proxyPort string) error {
+func (o *Client) Start(key, serverPort, proxyPort string, crc bool) error {
 	lClient.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	lClient.SetPrefix("C")
 	lClient.SetColor(true)
@@ -39,7 +39,7 @@ func (o *Client) Start(key, serverPort, proxyPort string) error {
 		lClient.Log4Trace("AES crypt disabled")
 	}
 
-	o.msg = omsg.NewClient(o)
+	o.msg = omsg.NewClient(o, crc)
 	return o.Reconnect()
 }
 
@@ -89,7 +89,7 @@ func (o *Client) OmsgData(cmd, ext uint16, data []byte) {
 
 // Send 原始数据加密后发送
 func (o *Client) Send(cmd, ext uint16, originData []byte) error {
-	return omsg.Send(o.msg.Conn, cmd, ext, aesCrypt(originData))
+	return o.msg.Send(cmd, ext, aesCrypt(originData))
 }
 
 // Reconnect 重新连接服务器

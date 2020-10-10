@@ -2,3 +2,5 @@ github.com/ohko/logger v0.2.11-0.20200824093615-157b51a0d33f h1:gIaVHE32ARpSiv66
 github.com/ohko/logger v0.2.11-0.20200824093615-157b51a0d33f/go.mod h1:1jxOt4Jtt6LHo6+6JEZhYiL+VPJb5+oM5Elq+Kl93No=
 github.com/ohko/omsg v1.1.1 h1:FPAHGXkt6b4wKO9HgTbTsPbz8NwNNx1wF+ZrAD3+mRo=
 github.com/ohko/omsg v1.1.1/go.mod h1:LCA7D0D6uQ+exHFBEFt6vF3N5KjpGuisr5S1aExQMSg=
+github.com/ohko/omsg v1.2.1 h1:egwgw4FtQV39nbLRBGADOjs9pnKqZVXu7vRO3jcGRAA=
+github.com/ohko/omsg v1.2.1/go.mod h1:8rW36bzGt+tdPlxN2q9wdn0F2nqbsEpuwSeJnbNOZh8=

@@ -38,7 +38,7 @@ type userInfo struct {
 }
 
 // Start 启动服务
-func (o *Server) Start(key, serverPort string) error {
+func (o *Server) Start(key, serverPort string, crc bool) error {
 	lServer.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	lServer.SetPrefix("S")
 	lServer.SetColor(true)
@@ -54,7 +54,7 @@ func (o *Server) Start(key, serverPort string) error {
 		lServer.Log4Trace("AES crypt disabled")
 	}
 
-	o.msg = omsg.NewServer(o)
+	o.msg = omsg.NewServer(o, crc)
 	go func() {
 		lServer.Log4Trace("server:", o.serverPort)
 		lServer.Log4Trace(o.msg.StartServer(o.serverPort))
@@ -122,7 +122,7 @@ func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 
 // Send 原始数据加密后发送
 func (o *Server) Send(conn net.Conn, cmd, ext uint16, originData []byte) error {
-	return omsg.Send(conn, cmd, ext, aesCrypt(originData))
+	return o.msg.Send(conn, cmd, ext, aesCrypt(originData))
 }
 
 // 0.0.0.0:8080:192.168.1.238:50000 请求服务器开启8080端口代理192.168.1.238的5000端口

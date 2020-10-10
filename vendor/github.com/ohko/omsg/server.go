@@ -9,13 +9,14 @@ import (
 // Server 服务器
 type Server struct {
 	si         ServerInterface
+	crc        bool         // 是否启用crc校验
 	Listener   net.Listener // 用于服务器
 	ClientList sync.Map     // 客户端列表
 }
 
 // NewServer 创建
-func NewServer(si ServerInterface) *Server {
-	return &Server{si: si}
+func NewServer(si ServerInterface, crc bool) *Server {
+	return &Server{si: si, crc: crc}
 }
 
 // StartServer 启动服务
@@ -54,7 +55,7 @@ func (o *Server) hServer(conn net.Conn) {
 	}()
 
 	for {
-		cmd, ext, bs, err := Recv(conn)
+		cmd, ext, bs, err := Recv(o.crc, conn)
 		if err != nil {
 			o.si.OmsgError(conn, err)
 			break
@@ -63,10 +64,15 @@ func (o *Server) hServer(conn net.Conn) {
 	}
 }
 
+// Send 向客户端发送数据
+func (o *Server) Send(conn net.Conn, cmd, ext uint16, data []byte) error {
+	return Send(o.crc, conn, cmd, ext, data)
+}
+
 // SendToAll 向所有客户端发送数据
 func (o *Server) SendToAll(cmd, ext uint16, data []byte) {
 	o.ClientList.Range(func(key, value interface{}) bool {
-		Send(key.(net.Conn), cmd, ext, data)
+		Send(o.crc, key.(net.Conn), cmd, ext, data)
 		return true
 	})
 }

@@ -34,7 +34,7 @@ const signWord = 0x4B48            // 标志HK
 var headSize = binary.Size(head{}) // 头尺寸
 
 // Send ...
-func Send(conn net.Conn, cmd, ext uint16, data []byte) error {
+func Send(cr bool, conn net.Conn, cmd, ext uint16, data []byte) error {
 	buffer := make([]byte, headSize+len(data))
 	// defer func() { log.Println("send:\n" + hex.Dump(buffer)) }()
 
@@ -42,7 +42,11 @@ func Send(conn net.Conn, cmd, ext uint16, data []byte) error {
 	binary.LittleEndian.PutUint16(buffer, signWord)
 
 	// CRC
-	binary.LittleEndian.PutUint16(buffer[2:], crc(data))
+	if cr {
+		binary.LittleEndian.PutUint16(buffer[2:], crc(data))
+	} else {
+		binary.LittleEndian.PutUint16(buffer[2:], 0)
+	}
 
 	// Cmd
 	binary.LittleEndian.PutUint16(buffer[4:], cmd)
@@ -65,7 +69,7 @@ func Send(conn net.Conn, cmd, ext uint16, data []byte) error {
 }
 
 // Recv ...
-func Recv(conn net.Conn) (uint16, uint16, []byte, error) {
+func Recv(cr bool, conn net.Conn) (uint16, uint16, []byte, error) {
 
 	header := make([]byte, headSize)
 	if _, err := io.ReadFull(conn, header); err != nil {
@@ -77,9 +81,6 @@ func Recv(conn net.Conn) (uint16, uint16, []byte, error) {
 	if signWord != binary.LittleEndian.Uint16(header) {
 		return 0, 0, nil, errors.New("sign err")
 	}
-
-	// CRC
-	icrc := binary.LittleEndian.Uint16(header[2:])
 
 	// Cmd
 	cmd := binary.LittleEndian.Uint16(header[4:])
@@ -98,8 +99,11 @@ func Recv(conn net.Conn) (uint16, uint16, []byte, error) {
 	// log.Println("recv buffer:\n" + hex.Dump(buffer))
 
 	// check crc
-	if icrc != crc(buffer) {
-		return 0, 0, nil, errors.New("crc err")
+	if cr {
+		icrc := binary.LittleEndian.Uint16(header[2:])
+		if icrc != crc(buffer) {
+			return 0, 0, nil, errors.New("crc err")
+		}
 	}
 
 	return cmd, ext, buffer, nil

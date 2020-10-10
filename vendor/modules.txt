@@ -2,6 +2,6 @@
 ## explicit
 github.com/ohko/logger
 github.com/ohko/logger/email
-# github.com/ohko/omsg v1.1.1
+# github.com/ohko/omsg v1.2.1
 ## explicit
 github.com/ohko/omsg

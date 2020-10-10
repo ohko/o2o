@@ -27,15 +27,16 @@ func serivces() {
 	serverPort := ":2399"
 	proxyPort := "0.0.0.0:2345:127.0.0.1:5000"
 	key := "12345678"
+	crc := false
 
 	// server
-	if err := s.Start(key, serverPort); err != nil {
+	if err := s.Start(key, serverPort, crc); err != nil {
 		log.Fatal(err)
 	}
 	time.Sleep(time.Second)
 
 	// client
-	if err := c.Start(key, serverPort, proxyPort); err != nil {
+	if err := c.Start(key, serverPort, proxyPort, crc); err != nil {
 		log.Fatal(err)
 	}
 
@@ -190,15 +191,16 @@ func TestDisconnect(t *testing.T) {
 	serverPort := ":2399"
 	proxyPort := "0.0.0.0:2345:127.0.0.1:5000"
 	key := "12345678"
+	crc := false
 
 	// server
-	if err := s.Start(key, serverPort); err != nil {
+	if err := s.Start(key, serverPort, crc); err != nil {
 		log.Fatal(err)
 	}
 	time.Sleep(time.Second)
 
 	// client
-	if err := c.Start(key, serverPort, proxyPort); err != nil {
+	if err := c.Start(key, serverPort, proxyPort, crc); err != nil {
 		log.Fatal(err)
 	}
 
