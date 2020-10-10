@@ -44,6 +44,9 @@ func proxy(conn net.Conn) {
 	}
 	defer local.Close()
 
-	go io.Copy(conn, local)
+	go func() {
+		io.Copy(conn, local)
+		conn.Close()
+	}()
 	io.Copy(local, conn)
 }
