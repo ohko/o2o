@@ -110,6 +110,7 @@ func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 		client, _, data := deData(data)
 		lServer.Log0Debug("client server error:", string(data))
 		if user, ok := o.users.Load(client); ok {
+			time.Sleep(time.Microsecond * 300)
 			lServer.Log0Debug("close user:", client)
 			user.(*userInfo).userConn.Close()
 		}
