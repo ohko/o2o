@@ -62,6 +62,9 @@ func (o *Client) OmsgClose() {
 		return true
 	})
 
+	// 等待1秒再重连
+	time.Sleep(time.Second)
+
 	// 断线后重连
 	o.Reconnect()
 }
