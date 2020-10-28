@@ -68,7 +68,7 @@ func (o *Server) Start(key, serverPort string, crc bool) (err error) {
 // OnRecvError ...
 func (o *Server) OnRecvError(conn net.Conn, err error) {
 	if err != io.EOF {
-		lServer.Log2Error(err)
+		lServer.Log2Error(conn.RemoteAddr().String(), err)
 	}
 }
 
