@@ -13,6 +13,7 @@ import (
 
 // ...
 const (
+	cmdHeart         = 0 // 0.心跳包
 	cmdTunnel        = 1 // 1.客户端请求TCP隧道服务
 	cmdTunnelSuccess = 2 // 2.服务器监听成功
 	cmdTunnelFailed  = 3 // 3.服务器监听失败

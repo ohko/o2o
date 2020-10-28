@@ -38,7 +38,7 @@ type userInfo struct {
 }
 
 // Start 启动服务
-func (o *Server) Start(key, serverPort string, crc bool) error {
+func (o *Server) Start(key, serverPort string, crc bool) (err error) {
 	lServer.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	lServer.SetPrefix("S")
 	lServer.SetColor(true)
@@ -54,29 +54,32 @@ func (o *Server) Start(key, serverPort string, crc bool) error {
 		lServer.Log4Trace("AES crypt disabled")
 	}
 
-	o.msg = omsg.NewServer(o, crc)
-	go func() {
-		lServer.Log4Trace("server:", o.serverPort)
-		lServer.Log4Trace(o.msg.StartServer(o.serverPort))
-	}()
+	lServer.Log4Trace("server:", o.serverPort)
+	if o.msg, err = omsg.Listen("tcp", o.serverPort); err == nil {
+		go o.msg.Run(o, crc)
+	}
 
-	return nil
+	// 设置超时时间
+	o.msg.SetDeadline(time.Second * 30)
+
+	return
 }
 
-// OmsgError ...
-func (o *Server) OmsgError(conn net.Conn, err error) {
+// OnRecvError ...
+func (o *Server) OnRecvError(conn net.Conn, err error) {
 	if err != io.EOF {
 		lServer.Log2Error(err)
 	}
 }
 
-// OmsgNewClient ...
-func (o *Server) OmsgNewClient(conn net.Conn) {
+// OnAccept ...
+func (o *Server) OnAccept(conn net.Conn) bool {
 	lServer.Log0Debug("client connect:", conn.RemoteAddr())
+	return true
 }
 
-// OmsgClientClose ...
-func (o *Server) OmsgClientClose(conn net.Conn) {
+// OnClientClose ...
+func (o *Server) OnClientClose(conn net.Conn) {
 	// 释放tunnel监听的端口
 	if client, ok := o.clients.Load(conn); ok {
 		lServer.Log0Debug("close port:", client.(net.Listener).Addr().String())
@@ -86,12 +89,16 @@ func (o *Server) OmsgClientClose(conn net.Conn) {
 	lServer.Log0Debug("client close:", conn.RemoteAddr())
 }
 
-// OmsgData ...
-func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
+// OnData ...
+func (o *Server) OnData(conn net.Conn, cmd, ext uint16, data []byte) error {
 	data = aesCrypt(data)
 	// lServer.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
 	switch cmd {
+	case cmdHeart:
+		if err := o.Send(conn, cmdHeart, 0, nil); err != nil {
+			conn.Close()
+		}
 	case cmdTunnel:
 		t := &tunnelInfo{srv: o, tunnelAddr: string(data), clientConn: conn}
 		if err := o.createListen(t); err != nil {
@@ -118,6 +125,8 @@ func (o *Server) OmsgData(conn net.Conn, cmd, ext uint16, data []byte) {
 			lServer.Log0Debug("close user:", client)
 		}
 	}
+
+	return nil
 }
 
 // Send 原始数据加密后发送
@@ -153,11 +162,11 @@ func (o *Server) createListen(tunnel *tunnelInfo) error {
 		return err
 	}
 	o.clients.Store(tunnel.clientConn, client)
-	lServer.Log0Debug("tunnel:", address, tunnel.clientConn.RemoteAddr(), tunnel.tunnelAddr)
+	lServer.Log4Trace("tunnel:", address, tunnel.clientConn.RemoteAddr(), tunnel.tunnelAddr)
 
 	go func() {
 		defer func() {
-			lServer.Log0Debug("closed:", address, tunnel.clientConn.RemoteAddr(), tunnel.tunnelAddr)
+			lServer.Log4Trace("closed:", address, tunnel.clientConn.RemoteAddr(), tunnel.tunnelAddr)
 			client.Close()
 			tunnel.clientConn.Close()
 			o.clients.Delete(tunnel.clientConn)

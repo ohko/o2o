@@ -17,6 +17,7 @@ import (
 // Client 客户端
 type Client struct {
 	msg                   *omsg.Client
+	crc                   bool
 	serverPort, proxyPort string
 	localServers          sync.Map // map[浏览器IP:Port + 本地服务IP:Port]本地服务连接
 	localServersCount     int64    // 连接数
@@ -27,7 +28,7 @@ func (o *Client) Start(key, serverPort, proxyPort string, crc bool) error {
 	lClient.SetFlags(log.Lshortfile | log.Ldate | log.Ltime)
 	lClient.SetPrefix("C")
 	lClient.SetColor(true)
-	o.serverPort, o.proxyPort = serverPort, proxyPort
+	o.serverPort, o.proxyPort, o.crc = serverPort, proxyPort, crc
 
 	// setup AES
 	if len(key) > 0 {
@@ -39,19 +40,18 @@ func (o *Client) Start(key, serverPort, proxyPort string, crc bool) error {
 		lClient.Log4Trace("AES crypt disabled")
 	}
 
-	o.msg = omsg.NewClient(o, crc)
 	return o.Reconnect()
 }
 
-// OmsgError ...
-func (o *Client) OmsgError(err error) {
+// OnRecvError ...
+func (o *Client) OnRecvError(err error) {
 	if err != io.EOF {
 		lClient.Log2Error(err)
 	}
 }
 
-// OmsgClose ...
-func (o *Client) OmsgClose() {
+// OnClose ...
+func (o *Client) OnClose() {
 	lClient.Log0Debug("connect closed:", o.serverPort, o.proxyPort)
 
 	// 清理本地数据
@@ -69,8 +69,8 @@ func (o *Client) OmsgClose() {
 	o.Reconnect()
 }
 
-// OmsgData ...
-func (o *Client) OmsgData(cmd, ext uint16, data []byte) {
+// OnData ...
+func (o *Client) OnData(cmd, ext uint16, data []byte) error {
 	data = aesCrypt(data)
 	// lClient.Log0Debug(fmt.Sprintf("0x%x-0x%x:\n%s", cmd, ext, hex.Dump(data)))
 
@@ -88,6 +88,8 @@ func (o *Client) OmsgData(cmd, ext uint16, data []byte) {
 	case cmdData: // 远端浏览器数据流
 		o.browserDataStream(deData(data))
 	}
+
+	return nil
 }
 
 // Send 原始数据加密后发送
@@ -96,13 +98,26 @@ func (o *Client) Send(cmd, ext uint16, originData []byte) error {
 }
 
 // Reconnect 重新连接服务器
-func (o *Client) Reconnect() error {
+func (o *Client) Reconnect() (err error) {
 	for {
-		if err := o.msg.Connect(o.serverPort); err != nil {
+		if o.msg, err = omsg.Dial("tcp", o.serverPort, o, o.crc); err != nil {
 			lClient.Log2Error(err)
 			time.Sleep(time.Second)
 			continue
 		}
+
+		// 设置超时时间
+		o.msg.SetDeadline(time.Second * 30)
+
+		// 启动心跳包
+		go func() {
+			for {
+				time.Sleep(time.Second * 15)
+				if err := o.msg.Send(cmdHeart, 0, nil); err != nil {
+					break
+				}
+			}
+		}()
 
 		// 连接成功，发送Tunnel请求
 		o.Send(cmdTunnel, 0, []byte(o.proxyPort))

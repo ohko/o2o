@@ -9,17 +9,17 @@ import (
 
 // ServerInterface 服务端接口
 type ServerInterface interface {
-	OmsgNewClient(conn net.Conn)                          // 新客户端回调
-	OmsgData(conn net.Conn, cmd, ext uint16, data []byte) // 数据回调
-	OmsgError(conn net.Conn, err error)                   // 错误回调
-	OmsgClientClose(conn net.Conn)                        // 客户端断开回调
+	OnAccept(conn net.Conn) bool                              // 新客户端回调，返回true=允许接入/false=放弃接入
+	OnData(conn net.Conn, cmd, ext uint16, data []byte) error // 数据回调
+	OnRecvError(conn net.Conn, err error)                     // 接收数据错误回调
+	OnClientClose(conn net.Conn)                              // 客户端断开回调
 }
 
 // ClientInterface 客户端接口
 type ClientInterface interface {
-	OmsgData(cmd, ext uint16, data []byte) // 收到命令行回调
-	OmsgError(err error)                   // 错误回调
-	OmsgClose()                            // 连接断开回调
+	OnData(cmd, ext uint16, data []byte) error // 收到命令行回调
+	OnRecvError(err error)                     // 接收数据错误回调
+	OnClose()                                  // 连接断开回调
 }
 
 type head struct {
